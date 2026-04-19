@@ -1,0 +1,50 @@
+{
+    "name": "oleant/laravel-visit-analytics",
+    "description": "Privacy-focused visit analytics for Laravel 10/11/12 with UTM and Referrer tracking.",
+    "keywords": ["laravel", "analytics", "utm", "privacy", "visit-log"],
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Oleant",
+            "homepage": "https://oleant.dev",
+            "email": "info@oleant.dev"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "illuminate/database": "^10.0|^11.0|^12.0",
+        "illuminate/http": "^10.0|^11.0|^12.0",
+        "jaybizzle/crawler-detect": "^1.2"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "pestphp/pest": "^2.0|^3.0",
+        "pestphp/pest-plugin-laravel": "^2.0|^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Oleant\\VisitAnalytics\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Oleant\\VisitAnalytics\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Oleant\\VisitAnalytics\\VisitAnalyticsServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
