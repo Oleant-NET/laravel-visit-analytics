@@ -68,10 +68,17 @@ return [
             // '127.0.0.1',
         ],
 
+        /**
+         * Specific emails that should be ignored.
+         */
+        'emails' => [
+            // 'admin@example.com',
+        ],
+
         /*
          * If true, visits from authenticated users will not be recorded.
          * Useful for filtering out your own activity while logged in.
          */
-        'ignore_authenticated' => true,
+        'ignore_authenticated' => false,
     ],
 ];

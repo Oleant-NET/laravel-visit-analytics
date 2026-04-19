@@ -16,45 +16,55 @@ class TrackVisits
      */
     public function terminate(Request $request, Response $response): void
     {
-        $excludePaths = config('visit-analytics.exclude.paths', []);
-        
-        // Extract referer path to catch background requests from excluded areas
-        $referer = $request->headers->get('referer');
-        $refererPath = $referer ? parse_url($referer, PHP_URL_PATH) : null;
-        $refererPath = $refererPath ? ltrim($refererPath, '/') : null;
+        try {
+            $excludePaths = config('visit-analytics.exclude.paths', []);
+            
+            // Extract referer path to catch background requests from excluded areas
+            $referer = $request->headers->get('referer');
+            $refererPath = $referer ? parse_url($referer, PHP_URL_PATH) : null;
+            $refererPath = $refererPath ? ltrim($refererPath, '/') : null;
 
-        // 1. Path & Referer Filtering
-        foreach ($excludePaths as $path) {
-            // Check if current URL matches exclusion pattern
-            if ($request->is($path)) {
+            // 1. Path & Referer Filtering
+            foreach ($excludePaths as $path) {
+                // Check if current URL matches exclusion pattern
+                if ($request->is($path)) {
+                    return;
+                }
+
+                // Check if request originated from an excluded path (e.g. Livewire update from Admin)
+                if ($refererPath && Str::is($path, $refererPath)) {
+                    return;
+                }
+            }
+
+            // 2. IP Exclusion
+            if (in_array($request->ip(), config('visit-analytics.exclude.ips', []))) {
                 return;
             }
 
-            // Check if request originated from an excluded path (e.g. Livewire update from Admin)
-            if ($refererPath && Str::is($path, $refererPath)) {
+            // 3. Specific emails (admins, publischers etc.) Exclusion
+            $user = auth()->user();
+            if ($user && in_array($user->email, config('visit-analytics.exclude.emails', []))) {
                 return;
             }
-        }
 
-        // 2. IP Exclusion
-        if (in_array($request->ip(), config('visit-analytics.exclude.ips', []))) {
-            return;
-        }
-
-        // 3. Auth Filter (Ignore logged-in users if configured)
-        if (config('visit-analytics.exclude.ignore_authenticated', false) && auth()->check()) {
-            return;
-        }
-
-        // 4. Bot Detection
-        if (!config('visit-analytics.track_bots', false)) {
-            $crawlerDetect = new CrawlerDetect;
-            if ($crawlerDetect->isCrawler($request->userAgent())) {
+            // 4. Auth Filter (Ignore logged-in users if configured)
+            if (config('visit-analytics.exclude.ignore_authenticated', false) && auth()->check()) {
                 return;
             }
-        }
 
-        $this->logVisit($request);
+            // 5. Bot Detection
+            if (!config('visit-analytics.track_bots', false)) {
+                $crawlerDetect = new CrawlerDetect;
+                if ($crawlerDetect->isCrawler($request->userAgent())) {
+                    return;
+                }
+            }
+
+            $this->logVisit($request);
+        } catch (\Throwable $e) {
+            \Log::error($e->getMessage());
+        }
     }
 
     /**
