@@ -8,6 +8,7 @@ use Oleant\VisitAnalytics\Models\VisitLog;
 use Symfony\Component\HttpFoundation\Response;
 use Jaybizzle\CrawlerDetect\CrawlerDetect;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 class TrackVisits
 {
@@ -37,8 +38,9 @@ class TrackVisits
                 }
             }
 
-            // 2. IP Exclusion
-            if (in_array($request->ip(), config('visit-analytics.exclude.ips', []))) {
+            // 2. IP & Subnet Exclusion (Supports Single IP and CIDR notation)
+            $excludedIps = config('visit-analytics.exclude.ips', []);
+            if (!empty($excludedIps) && IpUtils::checkIp($request->ip(), $excludedIps)) {
                 return;
             }
 
@@ -109,12 +111,15 @@ class TrackVisits
             return $ip;
         }
 
+        // For IPv4: Mask the last byte (e.g., 192.168.1.15 -> 192.168.1.0)
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            return preg_replace('/\.\d+$/', '.0', $ip);
+            return long2ip(ip2long($ip) & ip2long('255.255.255.0'));
         }
 
+        // For IPv6: Mask to /64 network (e.g., 2001:db8:85a3:08d3:1319:8a2e:0370:7334 -> 2001:db8:85a3:8d3::0)
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            return preg_replace('/:[0-9a-fA-F]+$/', ':0', $ip);
+            $parts = explode(':', $ip);
+            return implode(':', array_slice($parts, 0, 4)) . '::0';
         }
 
         return $ip;

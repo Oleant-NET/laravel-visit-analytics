@@ -25,9 +25,13 @@ class VisitAnalyticsServiceProvider extends ServiceProvider
         // Load package migrations automatically
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
-        // Register assets for publishing via 'php artisan vendor:publish'
         if ($this->app->runningInConsole()) {
             
+            // Registering the bot analysis command
+            $this->commands([
+                \Oleant\VisitAnalytics\Console\Commands\AnalyzeBots::class,
+            ]);
+
             // Publishing the configuration file
             $this->publishes([
                 __DIR__.'/../config/visit-analytics.php' => config_path('visit-analytics.php'),

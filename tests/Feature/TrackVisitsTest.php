@@ -71,6 +71,7 @@ it('filters utm parameters based on whitelist', function () {
     ]);
     expect($log->payload)->not->toHaveKey('secret_param');
 });
+
 it('does not record a visit for excluded paths', function () {
     config(['visit-analytics.exclude.paths' => ['admin*']]);
 
@@ -80,4 +81,40 @@ it('does not record a visit for excluded paths', function () {
     $this->get('/admin/dashboard');
 
     expect(VisitLog::count())->toBe(0);
+});
+
+it('does not record a visit for IPs within an excluded subnet', function () {
+    // Set a CIDR range in config
+    config(['visit-analytics.exclude.ips' => ['192.168.100.0/24']]);
+
+    // Act: Visit from an IP inside that range
+    $this->withServerVariables(['REMOTE_ADDR' => '192.168.100.15'])
+         ->get('/test-page');
+
+    // Assert: Database should be empty
+    expect(VisitLog::count())->toBe(0);
+});
+
+it('anonymizes IPv6 addresses to a /64 prefix', function () {
+    // Mock a full IPv6 address
+    $ipv6 = '2001:db8:85a3:08d3:1319:8a2e:0370:7334';
+    
+    $this->withServerVariables(['REMOTE_ADDR' => $ipv6])
+         ->get('/test-page');
+
+    // Assert: Check if IPv6 was masked to the first 4 segments (64 bits)
+    $log = VisitLog::first();
+    expect($log->ip_address)->toBe('2001:db8:85a3:08d3::0');
+});
+
+it('records visits from IPs just outside the excluded subnet', function () {
+    // Set a CIDR range
+    config(['visit-analytics.exclude.ips' => ['10.0.0.0/8']]);
+
+    // Act: Visit from an IP that is NOT in 10.x.x.x
+    $this->withServerVariables(['REMOTE_ADDR' => '11.0.0.1'])
+         ->get('/test-page');
+
+    // Assert: Should be recorded
+    expect(VisitLog::count())->toBe(1);
 });

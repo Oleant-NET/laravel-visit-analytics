@@ -10,10 +10,14 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $url
  * @property string $referer
  * @property array $payload
+ * @property \DateTime $processed_at
+ * @property int $bot_score
+ * @property bool $is_bot
+ * @property \DateTime $created_at
  */
 class VisitLog extends Model
 {
-    // We only need created_at for event logging
+    // We handle created_at manually in booted()
     public $timestamps = false;
 
     protected $fillable = [
@@ -22,11 +26,18 @@ class VisitLog extends Model
         'url',
         'referer',
         'payload',
+        // ADD THESE NEW FIELDS:
+        'processed_at',
+        'bot_score',
+        'is_bot',
     ];
 
     protected $casts = [
-        'payload' => 'array',
-        'created_at' => 'datetime',
+        'payload'      => 'array',
+        'processed_at' => 'datetime',
+        'created_at'   => 'datetime',
+        'bot_score'    => 'integer',
+        'is_bot'       => 'boolean',
     ];
 
     /**
@@ -35,7 +46,10 @@ class VisitLog extends Model
     protected static function booted()
     {
         static::creating(function ($model) {
-            $model->created_at = $model->freshTimestamp();
+            // Ensure created_at is set if not provided
+            if (!$model->created_at) {
+                $model->created_at = $model->freshTimestamp();
+            }
         });
     }
 }
