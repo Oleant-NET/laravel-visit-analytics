@@ -46,17 +46,25 @@ return [
         'threshold' => 70,
         'time_window' => 5,
 
-        // Analysis settings
+        /**
+         * Analysis settings
+         */ 
         'rate_limit_per_minute' => 30,
         'max_unique_paths' => 10,
         
-        // Minimum time between requests to consider it "human" (in seconds)
+        /**
+         * Minimum time between requests to consider it "human" (in seconds)
+         */
         'min_interval' => 2, 
 
-        // NEW: Max hits from same IP per day before applying incremental penalty
+        /**
+         * Max hits from same IP per day before applying incremental penalty 
+         */
         'daily_hits_threshold' => 20,
 
-        // Suspicious User-Agent fragments (Simple string matches)
+        /**
+         * Suspicious User-Agent fragments (Simple string matches) 
+         */
         'suspicious_ua' => [
             'bot',
             'Chrome/7', 
@@ -73,18 +81,24 @@ return [
             'Googlebot',
         ],
 
-        // Obsolete OS versions (Windows XP, 2000, etc.)
+        /**
+         * Obsolete OS versions (Windows XP, 2000, etc.) 
+         */
         'obsolete_os' => [
             'Windows NT 5.0', 'Windows NT 5.1', 'Windows NT 5.2', 'Windows NT 6.0'
         ],
 
-        // Advanced UA detection via Regular Expressions
-        // Pattern '/Chrome\/\d+\.0\.0\.0/': Catches bots using fake "zero-build" versions
+        /**
+         * Advanced UA detection via Regular Expressions
+         * Pattern '/Chrome\/\d+\.0\.0\.0/': Catches bots using fake "zero-build" versions 
+         */
         'ua_regex_patterns' => [
             '/Chrome\/\d+\.0\.0\.0/' => 20, 
         ],
 
-        // Public technical pages often targeted by crawlers before main content
+        /**
+         * Public technical pages often targeted by crawlers before main content 
+         */
         'tech_paths' => [
             'robots.txt',
             'login',
@@ -95,7 +109,9 @@ return [
             'privacy-policy',
         ],
 
-        // Keywords to identify datacenters via reverse DNS lookup
+        /**
+         * Keywords to identify datacenters via reverse DNS lookup 
+         */
         'datacenter_check' => [
             'enabled' => true,
             'keywords' => [
@@ -112,7 +128,9 @@ return [
             ],
         ],
 
-        // HoneyPot Path (Instant 100 score / Instant Ban)
+        /**
+         * HoneyPot Path (Instant 100 score / Instant Ban) 
+         */
         'honeypot_paths' => [
             '/.env',
             '/wp-admin',
@@ -144,6 +162,13 @@ return [
             
             // Direct access to subpages without a Referer header
             'no_referer'    => 35, 
+
+            /**
+             * Referer Loop Detection
+             * Added to catch bots that set Referer equal to the current URL 
+             * across multiple page requests.
+             */
+            'referer_loop' => 30,
             
             // Absence of a PTR record (Reverse DNS) for the IP address
             'no_dns_record' => 50, 

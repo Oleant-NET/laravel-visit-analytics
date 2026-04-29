@@ -3,7 +3,7 @@
 Lightweight, privacy-focused visit analytics for Laravel 10, 11, and 12. Track UTM parameters, referrers, and page views while automatically filtering out bots and respecting user privacy.
 
 ## Features
-- **Smart Bot Detection**: Uses behavioral and network analysis beyond simple User-Agent checks.
+- **Smart Bot Detection**: Advanced behavioral analysis including Referer-loop detection and page-refresh awareness.
 - **Bot Scoring System**: Assigns a score based on access speed, DNS records, and honeypot hits.
 - **Retroactive Flagging**: Identifies previous visits from an IP once it's confirmed as a bot.
 - **Privacy First**: IP anonymization (masks the last octet) enabled by default.
@@ -41,6 +41,7 @@ php artisan vendor:publish --tag="visit-analytics-config"
 * `track_bots`: (bool) Whether to log search engine crawlers.
 * `behavioral_analysis.threshold`: (int) Score (0-100) at which a visitor is flagged as a bot.
 * `whitelist`: (array) Only these GET parameters will be saved in the `payload`.
+* `behavioral_analysis.weights`: (array) Customizable scoring weights for UA, DNS, and Referer anomalies.
 
 ## Usage
 
@@ -61,6 +62,7 @@ To perform deep analysis (checks DNS, speed, and patterns), run the command:
 # Analyze last 1000 records
 php artisan visit-analytics:analyze-bots --max=1000 --full
 ```
+The command performs multi-stage analysis: static (patterns), behavioral (speed/history), and network (DNS/PTR).
 
 It is recommended to schedule this in `routes/console.php`:
 ```php

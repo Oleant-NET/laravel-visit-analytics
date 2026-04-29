@@ -145,17 +145,40 @@ class AnalyzeBots extends Command
             if (str_contains($log->url, $path)) return 100;
         }
 
-        // Referer analysis
-        if (empty($log->referer)) {
-            $path = parse_url($log->url, PHP_URL_PATH);
-            $score += (trim($path ?? '', '/') !== '') 
-                ? (int)(($config['weights']['no_referer'] ?? 10) * 2) 
-                : (int)($config['weights']['no_referer'] ?? 10);
-        }
+        // --- Referer Analysis ---
+        if (!empty($log->referer)) {
+            /**
+             * NORMALIZATION:
+             * We strip protocols (http/https) and trailing slashes from both URL and Referer.
+             */
+            $search = ['https://', 'http://'];
+            $cleanUrl = rtrim(str_replace($search, '', $log->url), '/');
+            $cleanRef = rtrim(str_replace($search, '', $log->referer), '/');
 
+            /**
+             * CASE: Self-Referencing (Referer equals the target URL).
+             */
+            if ($cleanUrl == $cleanRef) {
+                /**
+                 * THE "IMPOSSIBLE FIRST VISIT" LOGIC:
+                 * Check if there is prior history of this IP visiting this specific URL.
+                 */
+                $wasAlreadyOnThisPage = VisitLog::where('ip_address', $log->ip_address)
+                    ->where('url', $log->url)
+                    ->where('id', '<', $log->id)
+                    ->exists();
+
+                if (!$wasAlreadyOnThisPage) {
+                    $score += (int)($config['weights']['referer_loop'] ?? 100); 
+                } else {
+                    $score += 5; // Legitimate F5 refresh
+                }
+            }
+        }
+                
         return $score;
     }
-
+    
     /**
      * Behavioral checks: Activity frequency and path history.
      */
@@ -176,16 +199,31 @@ class AnalyzeBots extends Command
             $score += (int)($config['weights']['rate'] ?? 40);
         }
 
-        // Speed anomaly check
+        // --- Speed Anomaly Detection ---
+        // We look for the previous visit from the same IP to calculate the time gap.
         $prev = VisitLog::where('ip_address', $log->ip_address)
             ->where('id', '<', $log->id)
             ->orderBy('id', 'desc')
             ->first();
 
-        if ($prev && Carbon::parse($log->created_at)->diffInSeconds(Carbon::parse($prev->created_at)) < ($config['min_interval'] ?? 2)) {
-            $score += (int)($config['weights']['speed_anomaly'] ?? 40);
-        }
+        if ($prev) {
+            // Laravel's timestamps are usually in seconds. 
+            // A 0-second difference means multiple requests within the same second.
+            $diff = Carbon::parse($log->created_at)->diffInSeconds(Carbon::parse($prev->created_at));
+            $minInterval = ($config['min_interval'] ?? 2);
 
+            if ($diff < $minInterval) {
+                $baseWeight = (int)($config['weights']['speed_anomaly'] ?? 50);
+
+                /**
+                 * HUMAN VS BOT DIFFERENTIATION:
+                 * If $diff is 0, it's physically impossible for a human to click that fast.
+                 * We double the weight to trigger an immediate bot flag (50 * 2 = 100).
+                 * If $diff is 1s, we apply the standard weight as it's suspicious but potentially human.
+                 */
+                $score += ($diff === 0) ? ($baseWeight * 2) : $baseWeight;
+            }
+        }
         return $score;
     }
 
