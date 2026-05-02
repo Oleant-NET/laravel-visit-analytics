@@ -26,10 +26,12 @@ class VisitLog extends Model
         'url',
         'referer',
         'payload',
-        // ADD THESE NEW FIELDS:
         'processed_at',
         'bot_score',
+        'bot_reasons',
+        'bot_evidence',
         'is_bot',
+        'is_official_bot',
     ];
 
     protected $casts = [
@@ -38,6 +40,9 @@ class VisitLog extends Model
         'created_at'   => 'datetime',
         'bot_score'    => 'integer',
         'is_bot'       => 'boolean',
+        'is_official_bot' => 'boolean',
+        'bot_reasons'  => 'array',
+        'bot_evidence' => 'array',
     ];
 
     /**

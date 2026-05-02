@@ -171,3 +171,138 @@ it('accumulates score from multiple suspicious factors', function () {
     $log->refresh();
     expect($log->is_bot)->toBeTrue();
 });
+
+
+/**
+ * Test that the command correctly identifies an official Googlebot
+ * based on its legitimate IP address range and User-Agent string,
+ * then flags it with the maximum confidence score.
+ */
+it('correctly identifies and flags official googlebot', function () {
+    VisitLog::truncate();
+
+    $log = VisitLog::create([
+        'ip_address' => '66.249.66.0', // Real Google IP
+        'user_agent' => 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+        'url'        => 'http://localhost/page',
+        'created_at' => now(),
+    ]);
+
+    $this->artisan('visit-analytics:analyze-bots');
+
+    $log->refresh();
+    
+    expect($log->is_bot)->toBeTrue()
+        ->and($log->is_official_bot)->toBeTrue()
+        ->and($log->bot_score)->toBe(100);
+});
+
+
+/**
+ * Test that the bot analysis command records specific detection reasons
+ * and persists metadata evidence when a request matches multiple
+ * bot patterns, such as honeypot access and suspicious User-Agents.
+ */
+it('stores detailed reasons and evidence for bot detection', function () {
+    VisitLog::truncate();
+
+    // Simulating an attempt to access a hidden sensitive file
+    $honeypotUrl = 'http://localhost/.git/config';
+    $log = VisitLog::create([
+        'ip_address' => '8.8.8.8',
+        'user_agent' => 'Mozilla/5.0 (compatible; EvilScanner/1.0)',
+        'url'        => $honeypotUrl,
+        'created_at' => now(),
+    ]);
+
+    $this->artisan('visit-analytics:analyze-bots');
+
+    $log->refresh();
+
+    // Check detection reasons
+    expect($log->bot_reasons)->toBeArray()
+        ->and($log->bot_reasons)->toContain('honeypot_trap')
+        ->and($log->bot_reasons)->toContain('suspicious_ua');
+
+    // Check evidence (metadata)
+    // We verify that the specific URL that triggered the trap is stored
+    expect($log->bot_evidence)->toBeArray()
+        ->and($log->bot_evidence)->toHaveKey('honeypot_url', $honeypotUrl);
+});
+
+
+/**
+ * Test that flagging an IP as a bot retroactively updates its previous clean visits.
+ * 
+ * @return void
+ */
+it('updates previous visits from the same IP once it is flagged as a bot', function () {
+    // Prepare: clear logs and define a suspicious IP
+    VisitLog::truncate();
+    $suspiciousIp = '1.2.3.4';
+
+    // 1. Create an old "clean" visit (simulating a human)
+    VisitLog::create([
+        'ip_address'   => $suspiciousIp,
+        'user_agent'   => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+        'url'          => 'http://localhost/home',
+        'is_bot'       => false,
+        'bot_score'    => 0,
+        'processed_at' => now()->subHours(2), // Already processed as "safe"
+    ]);
+
+    // 2. Create a new visit that will trigger the honeypot
+    VisitLog::create([
+        'ip_address'   => $suspiciousIp,
+        'user_agent'   => 'Mozilla/5.0 (compatible; BotScanner/1.0)',
+        'url'          => 'http://localhost/.env', // Honeypot trigger
+        'is_bot'       => false,
+        'processed_at' => null, // Waiting for analysis
+    ]);
+
+    // 3. Run the analysis command
+    $this->artisan('visit-analytics:analyze-bots');
+
+    // 4. Assertions
+    $logs = VisitLog::where('ip_address', $suspiciousIp)->get();
+
+    // We expect both logs to be marked as bots now
+    expect($logs)->toHaveCount(2);
+
+    foreach ($logs as $log) {
+        expect($log->is_bot)->toBeTrue()
+            ->and($log->bot_score)->toBeGreaterThanOrEqual(100);
+        
+        // Check if the old visit got the retroactive reason
+        if ($log->url === 'http://localhost/home') {
+            expect($log->bot_reasons)->toBeArray()
+                ->and($log->bot_reasons)->toContain('retroactive_cleanup');
+        }
+    }
+});
+
+/**
+ * Test detection of technical port leaks in Referer.
+ */
+it('detects a bot based on technical port in referer', function () {
+    VisitLog::truncate();
+
+    config(['visit-analytics.behavioral_analysis.weights.port_leak' => 100]);
+    config(['visit-analytics.behavioral_analysis.threshold' => 70]);
+    config(['visit-analytics.behavioral_analysis.port_leak' => [2082]]);
+
+    $log = VisitLog::create([
+        'ip_address' => '7.7.7.7',
+        'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'url'        => 'https://oleant.net',
+        'referer'    => 'http://oleant.net:2082/',
+        'created_at' => now(),
+    ]);
+
+    $this->artisan('visit-analytics:analyze-bots');
+
+    $log->refresh();
+    expect($log->is_bot)->toBeTrue()
+        ->and($log->bot_reasons)->toContain('port_leak')
+        ->and($log->bot_evidence)->toHaveKey('leaked_port', 2082);
+});

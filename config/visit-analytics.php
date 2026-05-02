@@ -51,6 +51,16 @@ return [
          */ 
         'rate_limit_per_minute' => 30,
         'max_unique_paths' => 10,
+
+        /**
+         * The time window (in minutes) to check for session depth.
+         * 
+         * This is used to detect slow crawlers or automated scanners that 
+         * access a single URL without a referer and then disappear.
+         * If no other activity from the same IP is found within this 
+         * window (before or after), the visit is considered suspicious.
+         */
+        'depth_check_window' => 60,
         
         /**
          * Minimum time between requests to consider it "human" (in seconds)
@@ -63,37 +73,72 @@ return [
         'daily_hits_threshold' => 20,
 
         /**
-         * Suspicious User-Agent fragments (Simple string matches) 
+         * 1. EXPLICIT BOTS (Official Search Engines)
+         * These are identified as bots but are generally allowed for SEO.
+         * They will be marked as 'is_official_bot' in the database.
+         */
+        'explicit_bots' => [
+            'bot',
+            '+http',
+            'googlebot',
+            'bingbot',
+            'yandexbot',
+            'duckduckbot',
+            'baiduspider',
+            'facebot',
+            'ia_archiver',
+            'applebot',
+        ],
+
+        /**
+         * 2. SUSPICIOUS USER-AGENTS (Common fragments)
+         * Common library or tool strings used by scrapers and automated tools.
          */
         'suspicious_ua' => [
-            'bot',
-            'Chrome/7', 
             'MIUI', 
             'Headless', 
             'python-requests',
             'Palo Alto Networks',
+            'CFNetwork',
             'Cortex-Xpanse',
-            'compatible; MSIE 9.0; Windows NT 6.1',
-            'SM-C5000',
-            // Search Services    
-            'Google-InspectionTool', 
-            'bingbot',
-            'Googlebot',
+            'compatible',
+            'guzzlehttp',
+            'go-http-client',
+            'curl',
+            'php-requests',
+            'java',
+            'wget',
+            'bun',
+            'ruby',
+        ],
+
+        /**
+         * 3. CUMULATIVE PENALTY (The Snowball Effect)
+         * Progressive scoring for repeated violations from the same IP address.
+         * Helps catch stealthy bots that behave well initially.
+         */
+        'cumulative' => [
+            'enabled' => true,
+            'history_window_hours' => 24, // How far back to check for previous violations
+            'no_referer_window_minutes' => 10, // Time window (in minutes) to look back for previous direct hits (minutes)
+            'no_referer_increment' => 20, // Extra points added for repeated direct access
         ],
 
         /**
          * Obsolete OS versions (Windows XP, 2000, etc.) 
          */
         'obsolete_os' => [
-            'Windows NT 5.0', 'Windows NT 5.1', 'Windows NT 5.2', 'Windows NT 6.0'
+            'Windows NT 5',
+            'Windows NT 6',
+            'Mac OS X 10',
         ],
 
         /**
          * Advanced UA detection via Regular Expressions
-         * Pattern '/Chrome\/\d+\.0\.0\.0/': Catches bots using fake "zero-build" versions 
+         * Pattern '/\d+\.0\.0\.0/': Catches bots using fake "zero-build" versions 
          */
         'ua_regex_patterns' => [
-            '/Chrome\/\d+\.0\.0\.0/' => 20, 
+            '/\d+\.0\.0\.0/' => 35, 
         ],
 
         /**
@@ -107,6 +152,19 @@ return [
             'terms-of-use',
             'cookie-details',
             'privacy-policy',
+        ],
+
+        /**
+         * 4. SUSPICIOUS REFERER PORTS
+         * Technical ports in the Referer header (cPanel, Plesk, etc.) 
+         * Real users almost never arrive from these ports.
+         */
+        'port_leak' => [
+            2082, 2083, // cPanel
+            2086, 2087, // WHM
+            8443, 8880, // Plesk
+            2222,       // DirectAdmin
+            10000,      // Webmin
         ],
 
         /**
@@ -125,6 +183,7 @@ return [
                 'colocation',
                 'dedicated',
                 'at-vienna',
+                'dataline',
             ],
         ],
 
@@ -139,6 +198,9 @@ return [
             '/config.php',
             '/composer.lock',
             '/phpinfo.php',
+            '/.aws/credentials',
+            '/.vscode/sftp.json',
+            '/actuator/health',
         ],
 
         /*
@@ -152,23 +214,26 @@ return [
         */
         'weights' => [
             // High frequency of requests within the 'time_window'
-            'rate'          => 50, 
+            'rate'           => 50, 
             
             // Too many unique pages visited in a short period (crawling behavior)
-            'paths'         => 60, 
+            'paths'          => 60, 
             
             // Standard suspicious string found in the User-Agent
-            'ua'            => 50, 
+            'ua_suspicious'  => 50, 
+
+            // Matches found in the 'explicit_bots' list
+            'ua_explicit'    => 100, 
             
             // Direct access to subpages without a Referer header
-            'no_referer'    => 35, 
+            'no_referer'     => 35, 
 
             /**
              * Referer Loop Detection
              * Added to catch bots that set Referer equal to the current URL 
              * across multiple page requests.
              */
-            'referer_loop' => 30,
+            'referer_loop' => 50,
             
             // Absence of a PTR record (Reverse DNS) for the IP address
             'no_dns_record' => 50, 
@@ -181,6 +246,12 @@ return [
             
             // Instant detection for accessing trap URLs like /.env or /wp-admin
             'honeypot'      => 100,
+
+            /**
+             * Score points added for single-page visits with no referer.
+             * Recommended value: 20-30 (to be used as a contributing factor).
+             */
+            'single_visit' => 25,
             
             /*
             |--------------------------------------------------------------------------
@@ -199,6 +270,9 @@ return [
             
             // Incremental penalty for high volume of daily hits from the same IP
             'daily_hits_increment' => 10, 
+
+            // Traffic arriving from technical panel ports (:2082, etc.)
+            'port_leak' => 100,
         ],
     ],
 
