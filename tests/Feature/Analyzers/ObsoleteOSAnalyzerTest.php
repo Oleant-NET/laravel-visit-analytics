@@ -139,8 +139,11 @@ it('flags obsolete browsers with default weight', function () {
     $analyzer = new ObsoleteOSAnalyzer();
     
     $params = [
+        'target_os' => ['Windows NT 5.1'], // ОС должна быть в списке, чтобы открыть путь второму циклу
         'target_browsers' => ['MSIE'],
-        'weights' => [] // Weight is missing
+        'weights' => [
+            'obsolete_os' => 0 // Обнуляем вес ОС, чтобы проверить именно 35 баллов от браузера
+        ]
     ];
 
     $analyzer->analyze($log, $state, $params);

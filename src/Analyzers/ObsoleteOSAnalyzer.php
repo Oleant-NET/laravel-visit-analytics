@@ -42,6 +42,8 @@ class ObsoleteOSAnalyzer implements BotAnalyzerInterface
          */
         $obsoleteBrowserPatterns = $params['target_browsers'] ?? [];
 
+        $is_obsolete_os = false;
+
         foreach ($obsoleteOSPatterns as $pattern) {
             if (stripos($ua, $pattern) !== false) {
                 $points = (int)($params['weights']['obsolete_os'] ?? 35);
@@ -54,23 +56,27 @@ class ObsoleteOSAnalyzer implements BotAnalyzerInterface
                     'os_signature' => $pattern
                 ]);
 
+                $is_obsolete_os = true;
+
                 break;
             }
         }        
         
-        foreach ($obsoleteBrowserPatterns as $pattern) {
-            if (stripos($ua, $pattern) !== false) {
-                $points = (int)($params['weights']['obsolete_browsers'] ?? 35);
+        if ($is_obsolete_os) {
+            foreach ($obsoleteBrowserPatterns as $pattern) {
+                if (stripos($ua, $pattern) !== false) {
+                    $points = (int)($params['weights']['obsolete_browsers'] ?? 35);
 
-                /**
-                 * Add score and reason. 
-                 * We record the specific pattern found as technical evidence.
-                 */
-                $state->add($points, 'obsolete_browsers', [
-                    'browsers_signature' => $pattern
-                ]);
+                    /**
+                     * Add score and reason. 
+                     * We record the specific pattern found as technical evidence.
+                     */
+                    $state->add($points, 'obsolete_browsers', [
+                        'browsers_signature' => $pattern
+                    ]);
 
-                break;
+                    break;
+                }
             }
         }
     }
