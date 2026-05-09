@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        \Illuminate\Support\Facades\Schema::getConnection()
+            ->getDoctrineSchemaManager()
+            ->getDatabasePlatform()
+            ->registerDoctrineTypeMapping('timestamp', 'datetime');
+        
         Schema::table('visit_logs', function (Blueprint $table) {
             $table->timestamp('created_at', 3)->nullable()->change();
         });

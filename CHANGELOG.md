@@ -25,6 +25,39 @@ All notable changes to this project will be documented in this file.
 - **Legacy Config**: Old configuration structure is no longer supported. Users must republish the config file using `php artisan vendor:publish --tag="visit-analytics-config" --force`.
 - **Monolithic Analyzer**: Removed the old single-class analysis logic in favor of the new plugin system.
 
+## Upgrade Guide: From 1.x to 2.0.0
+
+Version 2.0.0 introduces a complete architectural rewrite, moving from a monolithic command to a service-oriented system with 11 specialized analyzers. This release improves detection precision and performance but requires manual update steps.
+
+### 1. Update Composer Dependency
+Update your version constraint in `composer.json` to `^2.0` and run:
+```bash
+composer update oleant/laravel-visit-analytics
+```
+
+### 2. Database Schema Update (High Precision Timestamps)
+The database schema has been enhanced to support high-resolution timing. You must run the migrations to update the `visit_logs` table to use `timestamp(3)` for the `created_at` column.
+```bash
+php artisan migrate
+```
+
+### 3. Replace Configuration File
+The configuration structure has been modularized and grouped by analyzer type. Your old `visit-analytics.php` config is not compatible with v2.0.
+
+1. Backup your old weights if you customized them.
+2. Force-republish the new config:
+```bash
+php artisan vendor:publish --tag="visit-analytics-config" --force
+```
+3. Re-apply your custom weights using the new logical sections.
+
+### 4. Clear Cache
+After updating the migrations and configuration, clear your application cache:
+```bash
+php artisan config:clear
+php artisan cache:clear
+```
+
 ## [1.3.0] - 2026-05-02
 
 ### Added
