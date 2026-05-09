@@ -33,12 +33,18 @@ class ObsoleteOSAnalyzer implements BotAnalyzerInterface
          * Windows NT 5.x covers XP and Server 2003.
          * Windows NT 6.0-6.3 covers Vista, 7, 8, and 8.1.
          */
-        $obsoletePatterns = $params['target_os'];
+        $obsoleteOSPatterns = $params['target_os'] ?? [];
 
-        foreach ($obsoletePatterns as $pattern) {
+        /** 
+         * Default patterns for obsolete systems.
+         * Windows NT 5.x covers XP and Server 2003.
+         * Windows NT 6.0-6.3 covers Vista, 7, 8, and 8.1.
+         */
+        $obsoleteBrowserPatterns = $params['target_browsers'] ?? [];
+
+        foreach ($obsoleteOSPatterns as $pattern) {
             if (stripos($ua, $pattern) !== false) {
-                // Get weight from config or fallback to 60 points
-                $points = (int)($params['weights']['obsolete_os'] ?? 60);
+                $points = (int)($params['weights']['obsolete_os'] ?? 35);
 
                 /**
                  * Add score and reason. 
@@ -48,10 +54,22 @@ class ObsoleteOSAnalyzer implements BotAnalyzerInterface
                     'os_signature' => $pattern
                 ]);
 
+                break;
+            }
+        }        
+        
+        foreach ($obsoleteBrowserPatterns as $pattern) {
+            if (stripos($ua, $pattern) !== false) {
+                $points = (int)($params['weights']['obsolete_browsers'] ?? 35);
+
                 /**
-                 * Exit loop after the first match to prevent redundant scoring 
-                 * for multiple OS markers in a single UA string.
+                 * Add score and reason. 
+                 * We record the specific pattern found as technical evidence.
                  */
+                $state->add($points, 'obsolete_browsers', [
+                    'browsers_signature' => $pattern
+                ]);
+
                 break;
             }
         }

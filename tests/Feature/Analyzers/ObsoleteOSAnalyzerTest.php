@@ -122,5 +122,30 @@ it('uses default weight when weight parameter is missing', function () {
 
     $analyzer->analyze($log, $state, $params);
 
-    expect($state->getScore())->toBe(60);
+    expect($state->getScore())->toBe(35);
+});
+
+/**
+ * @test
+ * Ensures the analyzer flags obsolete browsers and uses default weight 
+ * if no specific weight is provided for browsers.
+ */
+it('flags obsolete browsers with default weight', function () {
+    $log = VisitLog::factory()->make([
+        'user_agent' => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)'
+    ]);
+
+    $state = new AnalysisState();
+    $analyzer = new ObsoleteOSAnalyzer();
+    
+    $params = [
+        'target_browsers' => ['MSIE'],
+        'weights' => [] // Weight is missing
+    ];
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getScore())->toBe(35)
+        ->and($state->getReasons())->toContain('obsolete_browsers')
+        ->and($state->getEvidence())->toHaveKey('browsers_signature', 'MSIE');
 });

@@ -345,23 +345,48 @@ return [
                      * Mac OS X 10.x: Versions prior to Big Sur (11.0)
                      */
                     'target_os' => [
+                        'Windows 95',
+                        'Win95',
+                        'Windows 98',
+                        'Win98',
+                        'Windows ME',
                         'Windows NT 5.', 
                         'Windows NT 6.0', 
                         'Windows NT 6.1', 
                         'Windows NT 6.2', 
                         'Windows NT 6.3', 
-                        'Mac OS X 10_', // Older macOS versions
+                        'Mac OS X 10', // Older macOS versions
                         'Android 4.',
                         'Android 5.',
                         'Android 6.',
+                    ],
+                    /**
+                     * Explicitly blacklisted browser signatures.
+                     * 
+                     * Contains fragments of User-Agent strings for browsers that are 
+                     * considered functionally extinct for human traffic in 2026.
+                     * 
+                     * - MSIE / Trident: Internet Explorer (all versions), officially retired.
+                     * - Opera/8, Opera/9: Legacy Presto-based versions, often used by 
+                     *   low-quality scraping scripts.
+                     * 
+                     * Presence of these strings typically indicates automated tools, 
+                     * legacy botnets, or abandoned crawlers.
+                     */
+                    'target_browsers' => [
+                        'MSIE',      // Internet Explorer 10 and below
+                        'Trident/',  // Internet Explorer 11
+                        'Opera/8',   // Ancient Opera versions
+                        'Opera/9',
                     ],
 
                     'weights' => [
                         /**
                          * Penalty score for using an obsolete OS.
-                         * Default is 60, which is close to the typical bot threshold.
+                         * Default is 35+35, which is close to the typical bot threshold.
                          */
-                        'obsolete_os' => 60,
+                        'obsolete_os'       => 35,
+                        'obsolete_browsers' => 35,
                     ],
                 ],
             ],
@@ -391,7 +416,10 @@ return [
                         'firefox' => 150,
                         'safari'  => 19,
                         'edge'    => 147,
+                        'opera'   => 131,
+                        'ie'      => 11,
                     ],
+
 
                     /**
                      * Scoring thresholds based on the version difference (delta).
