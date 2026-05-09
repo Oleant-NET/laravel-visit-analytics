@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-05-09
+
+### Added
+- **Plugin-based Analyzer Architecture**: Decoupled detection logic into 11 specific classes (UserAgent, Network, Behavior, HeaderIntegrity, etc.).
+- **AnalysisState Object**: New state carrier to track scores, reasons, and technical evidence across the chain.
+- **Millisecond Precision Support**: Updated migrations to use `timestamp(3)` for `created_at` in `visit_logs` table, enabling high-precision behavior analysis and detection of ultra-fast automated requests.
+- **New Detection Layers**: Added HeaderIntegrity, ObsoleteOS, OutdatedBrowser, and Honeypot analyzers.
+- **Comprehensive Test Suite**: Massive update with 86 tests and 204 assertions providing 100% coverage.
+
+### Changed
+- **Architectural Refactor**: Full transition from a monolithic command to a service-oriented system with 2 core services and 11 analyzers.
+- **Config Modularization**: Weights and thresholds are now logically grouped by analyzer type (UA, Network, Behavior).
+- **Scoring Precision**: Refined detection algorithms to significantly reduce false positives by implementing cumulative scoring and context-aware checks.
+- **Database Schema**: Enhanced `visit_logs` table structure to support high-resolution timing and better indexing for historical lookups.
+
+### Fixed
+- **DNS Handling**: Improved exception handling for slow or timed-out DNS/PTR lookups to prevent analysis bottlenecks.
+- **AJAX False Positives**: Behavior analyzer now correctly identifies and ignores modern SPA/Vue/React background requests when calculating navigation speed.
+
+### Removed (Breaking Changes)
+- **Legacy Config**: Old configuration structure is no longer supported. Users must republish the config file using `php artisan vendor:publish --tag="visit-analytics-config" --force`.
+- **Monolithic Analyzer**: Removed the old single-class analysis logic in favor of the new plugin system.
+
 ## [1.3.0] - 2026-05-02
 
 ### Added

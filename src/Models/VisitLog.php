@@ -3,6 +3,8 @@
 namespace Oleant\VisitAnalytics\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Oleant\VisitAnalytics\Database\Factories\VisitLogFactory;
 
 /**
  * @property string $ip_address
@@ -17,12 +19,15 @@ use Illuminate\Database\Eloquent\Model;
  */
 class VisitLog extends Model
 {
+    use HasFactory;
+
     // We handle created_at manually in booted()
     public $timestamps = false;
 
     protected $fillable = [
         'ip_address',
         'user_agent',
+        'target_headers',
         'url',
         'referer',
         'payload',
@@ -43,6 +48,7 @@ class VisitLog extends Model
         'is_official_bot' => 'boolean',
         'bot_reasons'  => 'array',
         'bot_evidence' => 'array',
+        'target_headers' => 'array',
     ];
 
     /**
@@ -56,5 +62,15 @@ class VisitLog extends Model
                 $model->created_at = $model->freshTimestamp();
             }
         });
+    }
+
+    /**
+     * Create a new factory instance for the model.
+     * 
+     * @return \Illuminate\Database\Eloquent\Factories\Factory
+     */
+    protected static function newFactory()
+    {
+        return VisitLogFactory::new();
     }
 }
