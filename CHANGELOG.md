@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-05-10
+
+### Fixed: Missing millisecond precision in VisitLog timestamps.
+
+### Added: Model $dateFormat support and precision integrity tests.
+
+
 ## [2.0.0] - 2026-05-09
 
 ### Added

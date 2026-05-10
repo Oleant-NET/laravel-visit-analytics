@@ -24,6 +24,8 @@ class VisitLog extends Model
     // We handle created_at manually in booted()
     public $timestamps = false;
 
+    protected $dateFormat = 'Y-m-d H:i:s.v';
+
     protected $fillable = [
         'ip_address',
         'user_agent',

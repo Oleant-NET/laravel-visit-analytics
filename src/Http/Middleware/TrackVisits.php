@@ -172,6 +172,7 @@ class TrackVisits
                 'url'        => $request->fullUrl(),
                 'referer'    => $request->headers->get('referer'),
                 'payload'    => $payload ?: null,
+                'created_at' => now(),
             ]);
         } catch (\Throwable $e) {
             // We catch all errors but do nothing to ensure the main app 
