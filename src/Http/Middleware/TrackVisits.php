@@ -8,6 +8,7 @@ use Oleant\VisitAnalytics\Models\VisitLog;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\IpUtils;
+use Oleant\VisitAnalytics\Services\IpAnonymizerService;
 
 class TrackVisits
 {
@@ -152,11 +153,12 @@ class TrackVisits
     protected function logVisit(Request $request): void
     {
         try {
+
             $ip = $request->ip();
 
-            if ($this->config['anonymize_ip'] ?? true) {
-                $ip = $this->anonymizeIp($ip);
-            }
+            /** @var \Oleant\VisitAnalytics\Services\IpAnonymizerService $anonymizer */
+            $anonymizer = app(\Oleant\VisitAnalytics\Services\IpAnonymizerService::class);
+            $ip = $anonymizer->handle($request->ip());
 
             $whitelist = $this->config['whitelist'] ?? [];
             
@@ -179,29 +181,6 @@ class TrackVisits
             // stays functional even if analytics DB fails.
             // Optional: \Log::error($e->getMessage());
         }
-    }
-
-    /**
-     * Mask the IP address for GDPR compliance.
-     */
-    protected function anonymizeIp(?string $ip): ?string
-    {
-        if (!$ip) {
-            return $ip;
-        }
-
-        // For IPv4: Mask the last byte (e.g., 192.168.1.15 -> 192.168.1.0)
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            return long2ip(ip2long($ip) & ip2long('255.255.255.0'));
-        }
-
-        // For IPv6: Mask to /64 network (e.g., 2001:db8:85a3:08d3:1319:8a2e:0370:7334 -> 2001:db8:85a3:8d3::0)
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            $parts = explode(':', $ip);
-            return implode(':', array_slice($parts, 0, 4)) . '::0';
-        }
-
-        return $ip;
     }
 
     /**

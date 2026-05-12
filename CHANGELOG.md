@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0] - 2026-05-15
+
+### Added
+- **Botnet Reputation System**: New `BotnetReputationAnalyzer` layer that checks visitors against a local database of known botnet fingerprints.
+- **Cluster Detection Logic**: Implemented `BotnetService` capable of identifying coordinated attacks (clusters) where multiple IPs use identical signatures.
+- **New Database Layer**: Added `botnet_fingerprints` table to store and track identified botnet signatures.
+- **Automated Fingerprinting**: The `analyze-bots` command now automatically identifies and saves new botnets if they meet the threshold (e.g., 50+ visits from 10+ unique IPs).
+
+### Changed
+- **Extended Analyzer Chain**: Increased total analysis layers to 12.
+- **Improved Evidence Tracking**: Refactored `AnalysisState` to support `addEvidence()` for better semantic reporting of bot signatures.
+
+### Testing
+- **New Test Suites**: Added comprehensive tests for `BotnetService`, `BotnetReputationAnalyzer`, and extended `AnalyzeBots` command coverage.
+- **Reliability**: Verified protection against duplicate fingerprinting and IP anonymization edge cases.
+
+## [2.1.0] - 2026-05-13
+
+### Added
+Added anonymize_bots configuration option to allow preserving full IP addresses for detected bots (useful for security analysis and blacklisting).
+
+### Added .env support for all privacy settings:
+
+**VISIT_ANALYTICS_ANONYMIZE_IP**
+
+**VISIT_ANALYTICS_ANONYMIZE_MODE**
+
+**VISIT_ANALYTICS_ANONYMIZE_BOTS**
+
+### Changed
+**Major Refactoring:** Centralized all anonymization logic within IpAnonymizerService.
+
+**Refactored TrackVisits** middleware to delegate all IP processing to the service, improving maintainability.
+
+**Updated AnalyzeBots** console command to support the new final processing stage, ensuring IPs are masked only after bot analysis is complete in async mode.
+
+**Updated configuration file** with detailed documentation regarding GDPR/DSGVO compliance for each mode.
+
+### Fixed
+- Fixed `IpAnonymizerService` test suite to correctly run within the Laravel `TestCase` environment.
+- Improved handling of invalid IP strings and IPv4-mapped IPv6 addresses.
+
+### Testing
+- Expanded test suite to **100+ tests** with over **200 assertions**, covering all anonymization scenarios, bot detection logic, and configuration edge cases.
+
+
 ## [2.0.1] - 2026-05-10
 
 ### Fixed: Missing millisecond precision in VisitLog timestamps.

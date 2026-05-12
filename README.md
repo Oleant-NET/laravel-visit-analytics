@@ -3,7 +3,8 @@
 Lightweight, privacy-focused visit analytics for Laravel 10, 11, and 12. Track UTM parameters, referrers, and page views while automatically filtering out bots and respecting user privacy.
 
 ## Features
-- **Modular Analyzer Engine**: 11 specialized layers including Behavioral, Network, and Header integrity analysis.
+- **Distributed Botnet Protection**: (New v2.2) Detects coordinated botnet clusters by analyzing traffic spikes across multiple IPs and cross-referencing with a fingerprint database.
+- **Modular Analyzer Engine**: 12 specialized layers including Botnet Reputation, Behavioral, and Network integrity analysis.
 - **Smart Bot Detection**: Advanced behavioral analysis including Referer-loop detection and page-refresh awareness.
 - **Bot Scoring System**: Assigns a score based on access speed, DNS records, and honeypot hits.
 - **Retroactive Flagging**: Identifies previous visits from an IP once it's confirmed as a bot (Snowball Effect).
@@ -30,6 +31,8 @@ php artisan migrate
 
 ## Configuration
 
+* analyzers.botnet: Settings for cluster detection thresholds and reputation database weights.
+
 > **Note for Upgraders (v1.x to v2.0):** This version introduces a completely new configuration schema. You must backup your old settings and republish the config file.
 
 Run command (BASH):
@@ -48,6 +51,12 @@ The configuration is now organized by specialized Analyzers:
 
 ## Usage
 
+### Bot Analysis & Botnet Detection
+To perform deep analysis and identify coordinated botnet clusters (BASH):
+
+# Run standard analysis and update botnet fingerprints
+php artisan visit-analytics:analyze-bots
+
 ### Middleware Registration
 For Laravel 11 & 12, open bootstrap/app.php (PHP):
 ```php
@@ -61,9 +70,13 @@ For Laravel 11 & 12, open bootstrap/app.php (PHP):
 ### Bot Analysis Command
 To perform deep analysis using the new multi-stage engine (BASH):
 
+# Analyze last 1000 records (compact log)
 ```bash
-# Analyze last 1000 records
 php artisan visit-analytics:analyze-bots --max=1000
+```
+# Analyze last 1000 records with full info
+```bash
+php artisan visit-analytics:analyze-bots --max=1000 --full
 ```
 
 It is recommended to schedule this in routes/console.php (PHP):

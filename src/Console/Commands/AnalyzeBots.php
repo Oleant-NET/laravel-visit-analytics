@@ -5,12 +5,13 @@ namespace Oleant\VisitAnalytics\Console\Commands;
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Services\BotAnalysisService;
 use Oleant\VisitAnalytics\Services\RetroAnalysisService;
+use Oleant\VisitAnalytics\Services\BotnetService;
 use Illuminate\Console\Command;
 
 /**
  * Class AnalyzeBots
  * * Orchestrates the bot detection process by combining real-time behavioral 
- * analysis with retroactive pattern recognition.
+ * analysis with retroactive pattern recognition and botnet cluster detection.
  */
 class AnalyzeBots extends Command
 {
@@ -50,10 +51,14 @@ class AnalyzeBots extends Command
      *
      * @param BotAnalysisService $service
      * @param RetroAnalysisService $retroService
+     * @param BotnetService $botnetService
      * @return int
      */
-    public function handle(BotAnalysisService $service, RetroAnalysisService $retroService): int
-    {
+    public function handle(
+        BotAnalysisService $service, 
+        RetroAnalysisService $retroService, 
+        BotnetService $botnetService
+    ): int {
         $maxTotal = (int) $this->option('max');
         $isFull = (bool) $this->option('full');
         $threshold = (int) ($this->config['threshold'] ?? 70);
@@ -61,6 +66,7 @@ class AnalyzeBots extends Command
         $processedCount = 0;
         $botsDetected = 0;
         $retroactiveHits = 0;
+        $newBotnetsDetected = 0;
 
         if ($isFull) {
             $this->printStartupInfo($maxTotal, $threshold);
@@ -85,7 +91,14 @@ class AnalyzeBots extends Command
                         $botsDetected++;
                     }
 
+                    $ip = app(\Oleant\VisitAnalytics\Services\IpAnonymizerService::class)->handle(
+                        $log->ip_address, 
+                        $result->isBot, 
+                        final: true
+                    );
+
                     $log->update([
+                        'ip_address'      => $ip,
                         'bot_score'       => min($result->score, 100),
                         'is_bot'          => $result->isBot,
                         'is_official_bot' => $result->isOfficialBot,
@@ -111,18 +124,22 @@ class AnalyzeBots extends Command
                 return true;
             });
 
-        // 2. Retroactive Analysis: Perform cleanup and burst detection after primary processing
+        // 2. Retroactive & Botnet Analysis: Perform cleanup and cluster detection
         if ($processedCount > 0) {
             if ($isFull) {
                 $this->newLine();
-                $this->info("Starting retroactive analysis...");
+                $this->info("Starting retroactive and botnet cluster analysis...");
             }
             
+            // Standard retroactive cleanup
             $retroactiveHits = $retroService->handle();
+
+            // Detect distributed botnet clusters based on UA/IP patterns
+            $newBotnetsDetected = $botnetService->detectNewClusters();
         }
 
         // 3. Final Reporting
-        $this->reportResults($processedCount, $botsDetected, $retroactiveHits, $isFull);
+        $this->reportResults($processedCount, $botsDetected, $retroactiveHits, $newBotnetsDetected, $isFull);
 
         return self::SUCCESS;
     }
@@ -132,10 +149,11 @@ class AnalyzeBots extends Command
      * * @param int $processed
      * @param int $bots
      * @param int $retroactive
+     * @param int $newBotnets
      * @param bool $isFull
      * @return void
      */
-    protected function reportResults(int $processed, int $bots, int $retroactive, bool $isFull): void
+    protected function reportResults(int $processed, int $bots, int $retroactive, int $newBotnets, bool $isFull): void
     {
         $rate = $processed > 0 ? round(($bots / $processed) * 100, 2) : 0;
         $timestamp = now()->format('Y-m-d H:i:s');
@@ -148,11 +166,12 @@ class AnalyzeBots extends Command
                 ['Bots Detected', $bots],
                 ['Detection Rate', $rate . '%'],
                 ['Retroactive Hits', $retroactive],
+                ['New Botnet Clusters', $newBotnets],
             ]);
         } else {
             $this->line(sprintf(
-                "[%s] OK: %d | Bots: %d (%s%%) | Retro: %d",
-                $timestamp, $processed, $bots, $rate, $retroactive
+                "[%s] OK: %d | Bots: %d (%s%%) | Retro: %d | New Botnets: %d",
+                $timestamp, $processed, $bots, $rate, $retroactive, $newBotnets
             ));
         }
     }

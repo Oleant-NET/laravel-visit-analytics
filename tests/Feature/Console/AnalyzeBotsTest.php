@@ -3,6 +3,7 @@
 uses(\Oleant\VisitAnalytics\Tests\TestCase::class);
 
 use Oleant\VisitAnalytics\Models\VisitLog;
+use Oleant\VisitAnalytics\Models\BotnetFingerprint;
 use Illuminate\Support\Facades\Artisan;
 
 /**
@@ -107,4 +108,131 @@ it('provides output when --full flag is used', function () {
     $exitCode = Artisan::call('visit-analytics:analyze-bots', ['--full' => true]);
     
     expect($exitCode)->toBe(0);
+});
+
+/**
+ * @test
+ * Verifies that the command anonymizes the IP address in async mode.
+ */
+it('anonymizes the ip address when running in async mode', function () {
+    // 1. Set config to async mode
+    config([
+        'visit-analytics.collection.anonymize_ip' => true,
+        'visit-analytics.collection.anonymize_mode' => 'async'
+    ]);
+
+    // 2. Create a log with a full IP
+    $log = VisitLog::create([
+        'ip_address' => '1.2.3.4',
+        'user_agent' => 'Test',
+        'url' => '/',
+        'processed_at' => null
+    ]);
+
+    // 3. Execute the command
+    $this->artisan('visit-analytics:analyze-bots');
+
+    // 4. Assert the IP is now anonymized in the database
+    $log->refresh();
+    expect($log->ip_address)->toBe('1.2.3.0');
+});
+
+/**
+ * @test
+ * Verifies that the command leaves the IP intact if anonymize_ip is disabled.
+ */
+it('does not anonymize the ip if the feature is disabled', function () {
+    config(['visit-analytics.collection.anonymize_ip' => false]);
+
+    $log = VisitLog::create([
+        'ip_address' => '1.2.3.4',
+        'user_agent' => 'Test',
+        'url' => '/',
+        'processed_at' => null
+    ]);
+
+    $this->artisan('visit-analytics:analyze-bots');
+
+    $log->refresh();
+    expect($log->ip_address)->toBe('1.2.3.4');
+});
+
+/**
+ * @test
+ * Verifies that the command processes pending logs and successfully 
+ * identifies new botnet clusters based on traffic patterns.
+ */
+it('processes logs and triggers botnet cluster detection', function () {
+    /**
+     * 1. Setup: Prepare a 'clean' log entry that should be marked as processed.
+     */
+    VisitLog::create([
+        'ip_address' => '1.1.1.1',
+        'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+        'url'        => 'https://example.com/home',
+        'method'     => 'GET',
+        'processed_at' => null
+    ]);
+
+    /**
+     * 2. Setup: Prepare a suspicious cluster (55 visits from 11 unique IPs).
+     * We use a specific UA to trigger the cluster detection logic.
+     */
+    $ua = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+    for ($i = 1; $i <= 55; $i++) {
+        VisitLog::create([
+            'ip_address' => "2.2.2." . ($i % 11),
+            'user_agent' => $ua,
+            'url'        => 'https://example.com/login',
+            'method'     => 'POST',
+            'processed_at' => now() // Cluster detection usually looks at processed logs
+        ]);
+    }
+
+    /**
+     * 3. Action: Execute the bot analysis command.
+     */
+    Artisan::call('visit-analytics:analyze-bots');
+
+    /**
+     * 4. Assert: Ensure all pending logs are now marked as processed.
+     */
+    expect(VisitLog::whereNull('processed_at')->count())->toBe(0);
+    
+    /**
+     * 5. Assert: Verify that the new botnet fingerprint was detected and stored.
+     */
+    expect(BotnetFingerprint::where('user_agent', $ua)->exists())->toBeTrue();
+});
+
+/**
+ * @test
+ * Confirms that the command does not create duplicate fingerprints 
+ * if the same cluster is detected again.
+ */
+it('does not create duplicate fingerprints for existing botnets', function () {
+    $ua = 'Persistent-Botnet-UA/1.0';
+    
+    // Pre-seed the database with an existing fingerprint
+    BotnetFingerprint::create([
+        'ua_hash' => hash('sha256', $ua),
+        'user_agent' => $ua,
+        'is_active' => true
+    ]);
+
+    // Create logs that would normally trigger a new cluster detection
+    for ($i = 1; $i <= 55; $i++) {
+        VisitLog::create([
+            'ip_address' => "3.3.3." . ($i % 11),
+            'user_agent' => $ua,
+            'url'        => 'https://example.com/api',
+            'method'     => 'GET',
+            'processed_at' => now()
+        ]);
+    }
+
+    Artisan::call('visit-analytics:analyze-bots');
+
+    // Ensure we still have only one record for this UA
+    expect(BotnetFingerprint::where('user_agent', $ua)->count())->toBe(1);
 });

@@ -16,7 +16,29 @@ return [
          * will be masked before saving to the database. 
          * Highly recommended for GDPR/DSGVO compliance.
          */
-        'anonymize_ip' => true,
+        'anonymize_ip' => env('VISIT_ANALYTICS_ANONYMIZE_IP', true),
+
+        /**
+         * IP Anonymization Mode
+         *
+         * 'sync'  - Anonymize IP immediately in Middleware. High privacy, less data for analysis.
+         * 'async' - Anonymize IP later via Cron after bot analysis. High precision, temporary PII storage.
+         *
+         * Default: 'sync'
+         */
+        'anonymize_mode' => env('VISIT_ANALYTICS_ANONYMIZE_MODE', 'sync'),
+
+        /**
+         * Anonymize Detected Bots
+         *
+         * If true, even logs identified as bots will be anonymized after analysis.
+         * If false, full IP addresses of bots will be preserved for security 
+         * purposes (e.g., for manual blacklisting or Fail2Ban integration).
+         *
+         * Note: Setting this to 'false' may require a mention in your Privacy Policy.
+         * Default: true
+         */
+        'anonymize_bots' => env('VISIT_ANALYTICS_ANONYMIZE_BOTS', true),
 
         /**
          * Query Parameter Whitelist
@@ -650,6 +672,61 @@ return [
                         'enabled'               => true,
                         'history_window_hours'  => 24, // Look back period
                         'penalty_multiplier'    => 15, // Points per previous 'is_bot' event
+                    ],
+                ],
+            ],
+
+            /**
+             * Botnet Cluster Detection (v2.2.0)
+             * * Identifies distributed botnets by finding different IPs using the 
+             * same User-Agent with high request density. This analyzer works 
+             * in two modes:
+             * 1. Real-time: Fast lookup in the botnet_fingerprints table.
+             * 2. Retroactive: Deep SQL analysis to identify and store new clusters.
+             */
+            'botnet' => [
+                'enabled' => true,
+                'class'   => \Oleant\VisitAnalytics\Analyzers\BotnetReputationAnalyzer::class,
+                'params'  => [
+                    
+                    // --- Cluster Identification Thresholds ---
+                    
+                    /**
+                     * Minimum number of unique IPs for the same UA to be flagged as a botnet.
+                     */
+                    'ip_threshold' => (int) env('VISIT_ANALYTICS_BOTNET_IP_THRESHOLD', 10),
+
+                    /**
+                     * Minimum total hits for the same UA within the analysis window.
+                     */
+                    'hits_threshold' => (int) env('VISIT_ANALYTICS_BOTNET_HITS_THRESHOLD', 50),
+
+                    /**
+                     * Time window in hours for the retroactive cluster detection.
+                     * (0.16 = ~10 minutes, 1 = 1 hour, 24 = 1 day)
+                     */
+                    'analysis_window_hours' => (float) env('VISIT_ANALYTICS_BOTNET_WINDOW', 24),
+
+                    // --- Performance & Whitelisting ---
+
+                    /**
+                     * Throttling for 'last_seen_at' updates in the DB (seconds).
+                     * Prevents excessive writes during heavy botnet attacks.
+                     */
+                    'update_throttle' => 300,
+
+                    /**
+                     * Dynamic reference to the explicit bots list.
+                     * This ensures we NEVER flag official search engines as botnets.
+                     */
+                    'ignore_patterns' => fn() => config('visit-analytics.detection_engine.analyzers.explicit_bots.params.explicit_bots', []),
+
+                    'weights' => [
+                        /**
+                         * Penalty for a visit that matches a known botnet fingerprint.
+                         * Usually 100 to trigger immediate bot classification.
+                         */
+                        'known_botnet' => 100,
                     ],
                 ],
             ],
