@@ -52,6 +52,8 @@ class ExplicitBotsAnalyzer implements BotAnalyzerInterface
                     'bot_signature' => $botSign
                 ]);
 
+                $state->addEvidence('bot_identity', $botSign);
+
                 /**
                  * Flag as an official bot.
                  * This helps distinguish between 'malicious/unknown bots' and 

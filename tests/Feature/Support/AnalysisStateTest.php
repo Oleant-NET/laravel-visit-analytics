@@ -4,6 +4,8 @@ namespace Oleant\VisitAnalytics\Tests\Unit\Support;
 
 use Oleant\VisitAnalytics\Support\AnalysisState;
 
+uses(\Oleant\VisitAnalytics\Tests\TestCase::class);
+
 /**
  * @test
  * Verifies the default initial state of the AnalysisState object.
@@ -32,8 +34,12 @@ it('correctly adds points and reasons', function () {
     expect($state->getScore())->toBe(50)
         ->and($state->getReasons())->toEqual(['suspicious_header', 'datacenter_ip'])
         ->and($state->getEvidence())->toMatchArray([
-            'header_key' => 'X-Bot-Header',
-            'isp' => 'DigitalOcean'
+            'suspicious_header' => [
+                'header_key' => 'X-Bot-Header'
+            ],
+            'datacenter_ip' => [
+                'isp' => 'DigitalOcean'
+            ]
         ]);
 });
 
@@ -64,8 +70,8 @@ it('merges evidence data when multiple calls are made', function () {
     $evidence = $state->getEvidence();
 
     expect($evidence)->toHaveCount(2)
-        ->and($evidence)->toHaveKey('key1', 'val1')
-        ->and($evidence)->toHaveKey('key2', 'val2');
+        ->and($evidence)->toHaveKey('reason_1.key1', 'val1')
+        ->and($evidence)->toHaveKey('reason_2.key2', 'val2');
 });
 
 /**

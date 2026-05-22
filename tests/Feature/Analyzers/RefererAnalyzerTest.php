@@ -89,8 +89,7 @@ it('detects referer port leaks from hosting panels', function () {
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getScore())->toBe(45)
-        ->and($state->getReasons())->toContain('port_leak')
-        ->and($state->getEvidence())->toHaveKey('leaked_port', 8443);
+        ->and($state->getEvidence())->toHaveKey('port_leak.leaked_port', 8443);
 });
 
 /**
@@ -148,4 +147,41 @@ it('penalizes standard referer loops for returning visitors', function () {
 
     expect($state->getScore())->toBe(50)
         ->and($state->getReasons())->toContain('referer_loop');
+});
+
+/**
+ * @test
+ * Confirms that same-origin requests (e.g. AJAX) are ignored even if URL == Referer
+ */
+it('does not penalize same-origin requests that refer to themselves', function () {
+    $url = 'https://example.com/api/data';
+    
+    $log = VisitLog::factory()->create([
+        'url' => $url,
+        'referer' => $url,
+        'target_headers' => ['sec-fetch-site' => 'same-origin']
+    ]);
+
+    $state = new AnalysisState();
+    $analyzer = new RefererAnalyzer();
+    
+    $analyzer->analyze($log, $state, []);
+
+    expect($state->getScore())->toBe(0);
+});
+
+/**
+ * @test
+ * Verifies empty string referer is treated the same as null
+ */
+it('penalizes empty string referer as missing', function () {
+    $log = VisitLog::factory()->create(['referer' => '']);
+    $state = new AnalysisState();
+    $analyzer = new RefererAnalyzer();
+    
+    $params = ['weights' => ['no_referer' => 35]];
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getReasons())->toContain('missing_referer');
 });

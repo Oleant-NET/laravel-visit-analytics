@@ -36,8 +36,8 @@ class UserAgentAnalyzer implements BotAnalyzerInterface
         // 2. Run regex-based patterns and verification
         $this->analyzeUAPatterns($ua, $log, $state, $params);
 
-        // 3. Scan for suspicious keywords (Libraries, Tools)
-        $this->analyzeUAKeywords($ua, $state, $params);
+        // 3. Scan for UA engines (Gesko, Trident, etc.)
+        $this->analyzeUAEngine($ua, $state, $params);
     }
 
     /**
@@ -82,28 +82,27 @@ class UserAgentAnalyzer implements BotAnalyzerInterface
     }
 
     /**
-     * Scans the User-Agent for suspicious keywords.
+     * Scans the User-Agent for valid browser engines.
+     * If no valid engine is found, applies a penalty.
      */
-    protected function analyzeUAKeywords(string $ua, AnalysisState $state, array $params): void
+    protected function analyzeUAEngine(string $ua, AnalysisState $state, array $params): void
     {
-        $keywords = $params['suspicious_ua'] ?? [];
-        $weights = $params['weights'] ?? [];
+        $engines = $params['browser_engines'] ?? [];
         
-        foreach ($keywords as $keyword) {
-            $cleanKeyword = trim((string)$keyword);
-            if ($cleanKeyword === '') continue;
-
-            if (mb_stripos($ua, $cleanKeyword) !== false) {
-                $state->add(
-                    (int)($weights['ua_suspicious'] ?? 50), 
-                    'suspicious_ua_keyword', 
-                    ['ua_match_keyword' => $cleanKeyword]
-                );
-                
-                // Return after first match to prevent point bloating from a single header
+        // Check if the UA contains at least one known browser engine
+        foreach ($engines as $engine) {
+            if (str_contains($ua, $engine)) {
+                // Valid engine found, user is likely a real browser
                 return;
             }
         }
+
+        // No engine found: apply penalty and flag as suspicious
+        $state->add(
+            (int)($params['weights']['ua_suspicious'] ?? 50),
+            'ua_suspicious',
+            ['reason' => 'missing_browser_engine']
+        );
     }
 
     /**

@@ -34,6 +34,7 @@ class VisitLog extends Model
         'referer',
         'payload',
         'processed_at',
+        'anonymized_at',
         'bot_score',
         'bot_reasons',
         'bot_evidence',
@@ -44,6 +45,7 @@ class VisitLog extends Model
     protected $casts = [
         'payload'      => 'array',
         'processed_at' => 'datetime',
+        'anonymized_at' => 'datetime',
         'created_at'   => 'datetime',
         'bot_score'    => 'integer',
         'is_bot'       => 'boolean',

@@ -31,7 +31,7 @@ it('identifies bots based on user agent signatures', function () {
     expect($state->getScore())->toBe(100)
         ->and($state->getReasons())->toContain('explicit_bot')
         ->and($state->isOfficialBot)->toBeTrue()
-        ->and($state->getEvidence())->toHaveKey('bot_signature', 'googlebot');
+        ->and($state->getEvidence())->toHaveKey('explicit_bot.bot_signature', 'googlebot');
 });
 
 /**

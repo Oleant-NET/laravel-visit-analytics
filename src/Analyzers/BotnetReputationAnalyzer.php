@@ -6,6 +6,7 @@ use Oleant\VisitAnalytics\Contracts\BotAnalyzerInterface;
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Support\AnalysisState;
 use Oleant\VisitAnalytics\Services\BotnetService;
+use Log;
 
 /**
  * Class BotnetReputationAnalyzer
@@ -58,12 +59,25 @@ class BotnetReputationAnalyzer implements BotAnalyzerInterface
         if ($this->botnetService->isKnownBotnet($ua)) {
             $points = (int)($params['weights']['known_botnet'] ?? 100);
 
+            // Log the detection for real-time monitoring
+            Log::warning('Botnet signature detected', [
+                'ip' => $log->ip_address,
+                'user_agent' => $ua,
+                'points' => $points
+            ]);
+
             /**
              * Record the match as evidence.
-             * Since the signature is addEvidence(string $key, mixed $value),
-             * we pass the points as the value.
+             * Using add() to ensure proper hierarchy in AnalysisState.
              */
-            $state->addEvidence('known_botnet', $points);
+            $state->add(
+                $points, 
+                'botnet_match', 
+                [
+                    'signature' => 'known_botnet_fingerprint',
+                    'points_awarded' => $points
+                ]
+            );
         }
     }
 

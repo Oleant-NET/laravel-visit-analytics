@@ -50,13 +50,16 @@ it('detects outdated versions via client hints', function () {
 
     // Difference: 125 - 110 = 15. Should trigger 'major_lag'.
     expect($state->getScore())->toBe(50)
-        ->and($state->getReasons())->toContain('outdated_browser')
-        ->and($state->getEvidence())->toMatchArray([
+    ->and($state->getReasons())->toContain('outdated_browser')
+    ->and($state->getEvidence())->toMatchArray([
+        'outdated_browser' => [
             'browser' => 'chrome',
             'user_version' => 110,
             'version_lag' => 15,
-            'severity_level' => 'major_lag'
-        ]);
+            'severity_level' => 'major_lag',
+            'target_version' => 125 // Добавьте это
+        ]
+    ]);
 });
 
 /**
@@ -83,7 +86,7 @@ it('falls back to user agent when client hints are missing', function () {
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getScore())->toBe(80)
-        ->and($state->getEvidence())->toHaveKey('user_version', 90);
+        ->and($state->getEvidence())->toHaveKey('outdated_browser.user_version', 90);
 });
 
 /**
@@ -130,5 +133,5 @@ it('applies the highest applicable penalty level', function () {
 
     // Difference is 70, which matches all levels. Highest (level_3) should win.
     expect($state->getScore())->toBe(50)
-        ->and($state->getEvidence())->toHaveKey('severity_level', 'level_3');
+        ->and($state->getEvidence())->toHaveKey('outdated_browser.severity_level', 'level_3');
 });

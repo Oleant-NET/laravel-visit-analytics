@@ -153,8 +153,7 @@ it('does not flag IPs with valid PTR records that lack DC keywords', function ()
 
     $analyzer->analyze($log, $state, $params);
 
-    expect($state->getScore())->toBe(0)
-        ->and($state->getEvidence())->toHaveKey('ptr_record');
+    expect($state->getScore())->toBe(0);
 });
 
 /**

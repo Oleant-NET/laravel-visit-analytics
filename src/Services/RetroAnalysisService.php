@@ -24,15 +24,34 @@ class RetroAnalysisService
 
     /**
      * RetroAnalysisService constructor.
-     * Pre-loads configuration to avoid repeated config() calls.
+     * * Initializes the service with configuration parameters. It enforces a safety
+     * constraint on 'lookback_minutes' to ensure it does not exceed the data
+     * retention period, preventing the analysis of already anonymized IP data.
      */
     public function __construct()
     {
-        $config = config('visit-analytics.retro_analysis', []);
+        $retroConfig = config('visit-analytics.retro_analysis', []);
         
-        $this->sessionWindow   = (int)($config['session_window'] ?? 60);
-        $this->burstThreshold  = (int)($config['burst_threshold'] ?? 15);
-        $this->lookbackMinutes = (int)($config['lookback_minutes'] ?? 15);
+        // Retrieve the global retention window to ensure analysis consistency.
+        // Default to 60 minutes if not specified.
+        $retention = (int) config('visit-analytics.anonymization.retention_minutes', 30);
+
+        $this->sessionWindow   = (int)($retroConfig['session_window'] ?? 60);
+        $this->burstThreshold  = (int)($retroConfig['burst_threshold'] ?? 15);
+        
+        $lookback = (int)($retroConfig['lookback_minutes'] ?? 15);
+
+        // Enforce safety: lookback period cannot exceed the IP retention period.
+        // If the user's configuration is too aggressive, cap it and log a warning.
+        if ($lookback > $retention) {
+            \Log::warning("VisitAnalytics: retro_analysis.lookback_minutes ({$lookback}) exceeds " .
+                          "anonymization.retention_minutes ({$retention}). " .
+                          "Capping lookback to {$retention} minutes to prevent processing anonymized data.");
+            
+            $this->lookbackMinutes = $retention;
+        } else {
+            $this->lookbackMinutes = $lookback;
+        }
     }
 
     /**
@@ -67,7 +86,7 @@ class RetroAnalysisService
     {
         $suspiciousActors = VisitLog::query()
             ->select('ip_address', 'user_agent', DB::raw('COUNT(*) as request_count'))
-            ->where('created_at', '>=', now()->subMinutes($this->lookbackMinutes)) // Фикс: смотрим по created_at
+            ->where('created_at', '>=', now()->subMinutes($this->lookbackMinutes))
             ->where('is_bot', false)
             ->groupBy('ip_address', 'user_agent')
             ->having('request_count', '>=', $this->burstThreshold)
@@ -80,7 +99,6 @@ class RetroAnalysisService
         $totalAffected = 0;
 
         foreach ($suspiciousActors as $actor) {
-            // Находим все логи этого актора за период
             $logs = VisitLog::query()
                 ->where('ip_address', $actor->ip_address)
                 ->where('user_agent', $actor->user_agent)
@@ -88,7 +106,6 @@ class RetroAnalysisService
                 ->get();
 
             foreach ($logs as $log) {
-                // --- ЛОГИКА СКЛЕЙКИ ---
                 $currentReasons = $log->bot_reasons ?? [];
                 if (!in_array('burst_density_exceeded', $currentReasons)) {
                     $currentReasons[] = 'burst_density_exceeded';
@@ -103,10 +120,10 @@ class RetroAnalysisService
 
                 $log->update([
                     'is_bot'       => true,
-                    'bot_score'    => max($log->bot_score ?? 0, 100), // Не занижаем, если уже было 100
+                    'bot_score'    => max($log->bot_score ?? 0, 100),
                     'bot_reasons'  => $currentReasons,
                     'bot_evidence' => $currentEvidence,
-                    'processed_at' => $log->processed_at ?? now(), // Сохраняем старый таймстамп, если есть
+                    'processed_at' => $log->processed_at ?? now(), 
                 ]);
                 
                 $totalAffected++;
@@ -124,7 +141,6 @@ class RetroAnalysisService
     protected function backfillConfirmedBots(): int
     {
         // 1. Get unique masked IPs that were flagged as bots in the lookback period
-        // Добавляем получение минимального времени создания, чтобы окно не "уплыло"
         $flaggedData = VisitLog::query()
             ->select('ip_address', DB::raw('MIN(created_at) as earliest_bot_hit'))
             ->where('is_bot', true)
@@ -137,19 +153,17 @@ class RetroAnalysisService
         }
 
         $flaggedIps = $flaggedData->pluck('ip_address')->toArray();
-        // Берем самое раннее время среди всех найденных ботов для корректного окна
         $minCreatedAt = $flaggedData->min('earliest_bot_hit');
 
         $affected = 0;
         $backfillReason = 'retroactive_session_backfill';
 
         // 2. Find all "clean" records for these IPs within the tight session window (60s)
-        // Фикс: привязываемся к времени логов ($minCreatedAt), а не к текущему времени (now)
         $logsToBackfill = VisitLog::query()
             ->whereIn('ip_address', $flaggedIps)
             ->where('is_bot', false)
             ->where('created_at', '>=', \Carbon\Carbon::parse($minCreatedAt)->subSeconds($this->sessionWindow))
-            ->where('created_at', '<=', now()) // На всякий случай ограничиваем сверху
+            ->where('created_at', '<=', now())
             ->get();
 
         foreach ($logsToBackfill as $log) {

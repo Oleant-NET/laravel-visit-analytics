@@ -44,7 +44,7 @@ it('records a visit in the database', function () {
  */
 
 it('anonymizes ip addresses immediately when mode is set to sync', function () {
-    config(['visit-analytics.collection.anonymize_mode' => 'sync']);
+    config(['visit-analytics.collection.anonymization.anonymize_mode' => 'sync']);
 
     $this->withServerVariables(['REMOTE_ADDR' => '192.168.1.55'])
          ->get('/test-page');
@@ -53,7 +53,7 @@ it('anonymizes ip addresses immediately when mode is set to sync', function () {
 });
 
 it('preserves full ip address for later bot analysis when mode is set to async', function () {
-    config(['visit-analytics.collection.anonymize_mode' => 'async']);
+    config(['visit-analytics.collection.anonymization.anonymize_mode' => 'async']);
 
     $realIp = '1.2.3.4';
     $this->withServerVariables(['REMOTE_ADDR' => $realIp])
@@ -63,7 +63,7 @@ it('preserves full ip address for later bot analysis when mode is set to async',
 });
 
 it('skips anonymization entirely if anonymize_ip is disabled', function () {
-    config(['visit-analytics.collection.anonymize_ip' => false]);
+    config(['visit-analytics.collection.anonymization.anonymize_ip' => false]);
 
     $realIp = '8.8.8.8';
     $this->withServerVariables(['REMOTE_ADDR' => $realIp])

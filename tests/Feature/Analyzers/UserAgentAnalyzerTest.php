@@ -8,10 +8,6 @@ use Oleant\VisitAnalytics\Support\AnalysisState;
 
 uses(\Oleant\VisitAnalytics\Tests\TestCase::class);
 
-/**
- * @test
- * Verifies that an empty User-Agent results in a critical penalty.
- */
 it('penalizes empty user agent strings', function () {
     $log = VisitLog::factory()->make(['user_agent' => '']);
     $state = new AnalysisState();
@@ -22,45 +18,38 @@ it('penalizes empty user agent strings', function () {
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getScore())->toBe(100)
-        ->and($state->getReasons())->toContain('missing_user_agent');
+        ->and($state->getReasons())->toContain('missing_user_agent')
+        ->and($state->getEvidence())->toHaveKey('missing_user_agent.ua_status', 'empty_header');
 });
 
-/**
- * @test
- * Checks for suspicious library or automation tool keywords within the UA string.
- */
 it('detects suspicious keywords in user agent', function () {
-    $log = VisitLog::factory()->make([
-        'user_agent' => 'GuzzleHttp/7.0'
-    ]);
-
+    $log = VisitLog::factory()->make(['user_agent' => 'GuzzleHttp/7.0']);
     $state = new AnalysisState();
     $analyzer = new UserAgentAnalyzer();
     
+    // GuzzleHttp не является движком браузера, поэтому сработает ua_suspicious
     $params = [
-        'suspicious_ua' => ['GuzzleHttp', 'python-requests'],
+        'browser_engines' => ['Gecko', 'WebKit'], 
         'weights' => ['ua_suspicious' => 50]
     ];
 
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getScore())->toBe(50)
-        ->and($state->getEvidence())->toHaveKey('ua_match_keyword', 'GuzzleHttp');
+        ->and($state->getReasons())->toContain('ua_suspicious')
+        ->and($state->getEvidence())->toHaveKey('ua_suspicious.reason', 'missing_browser_engine');
 });
 
-/**
- * @test
- * Verifies regex pattern matching for specific browser or bot signatures.
- */
 it('matches user agent regex patterns', function () {
     $log = VisitLog::factory()->make([
-        'user_agent' => 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+        'user_agent' => 'Mozilla/5.0 (compatible; Googlebot/2.1)'
     ]);
 
     $state = new AnalysisState();
     $analyzer = new UserAgentAnalyzer();
     
     $params = [
+        'browser_engines' => ['Googlebot'], // Движок найден, лишних баллов нет
         'ua_regex_patterns' => [
             'google_bot' => [
                 'pattern' => 'Googlebot',
@@ -72,28 +61,23 @@ it('matches user agent regex patterns', function () {
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getReasons())->toContain('ua_match_google_bot')
-        ->and($state->getScore())->toBe(40);
+        ->and($state->getScore())->toBe(40)
+        ->and($state->getEvidence())->toHaveKey('ua_match_google_bot.matched_pattern', 'Googlebot');
 });
 
-/**
- * @test
- * Ensures Chromium browsers (v100+) are flagged if they fail to provide Client Hints.
- */
 it('flags modern chromium without client hints', function () {
     $log = VisitLog::factory()->make([
         'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-        'target_headers' => [] // Missing sec-ch-ua
+        'target_headers' => [] 
     ]);
 
     $state = new AnalysisState();
     $analyzer = new UserAgentAnalyzer();
     
     $params = [
+        'browser_engines' => ['Safari'],
         'ua_regex_patterns' => [
-            'chrome' => [
-                'pattern' => 'Chrome',
-                'requires_verification' => true
-            ]
+            'chrome' => ['pattern' => 'Chrome', 'requires_verification' => true]
         ],
         'weights' => ['verification_failed' => 80]
     ];
@@ -101,19 +85,17 @@ it('flags modern chromium without client hints', function () {
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getScore())->toBe(80)
-        ->and($state->getReasons())->toContain('verification_failed_chrome');
+        ->and($state->getReasons())->toContain('verification_failed_chrome')
+        ->and($state->getEvidence())->toHaveKey('verification_failed_chrome.matched_pattern', 'Chrome')
+        ->and($state->getEvidence())->toHaveKey('verification_failed_chrome.check', 'client_hints_mismatch');
 });
 
-/**
- * @test
- * Verifies that mismatched OS information between UA and Client Hints triggers a penalty.
- */
 it('flags mismatch between UA platform and client hints', function () {
     $log = VisitLog::factory()->make([
         'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
         'target_headers' => [
             'sec-ch-ua' => '"Google Chrome";v="110"',
-            'sec-ch-ua-platform' => '"Linux"' // Mismatch: UA contains 'Windows', but hint says 'Linux'
+            'sec-ch-ua-platform' => '"Linux"' 
         ]
     ]);
 
@@ -121,25 +103,21 @@ it('flags mismatch between UA platform and client hints', function () {
     $analyzer = new UserAgentAnalyzer();
     
     $params = [
+        'browser_engines' => ['Safari'],
         'ua_regex_patterns' => [
             'chrome' => ['pattern' => 'Chrome', 'requires_verification' => true]
         ],
-        'os_mapping' => [
-            'Windows' => 'Windows'
-        ],
+        'os_mapping' => ['Windows' => 'Windows'],
         'weights' => ['verification_failed' => 80]
     ];
 
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getReasons())->toContain('verification_failed_chrome')
-        ->and($state->getScore())->toBe(80);
+        ->and($state->getScore())->toBe(80)
+        ->and($state->getEvidence())->toHaveKey('verification_failed_chrome.check', 'client_hints_mismatch');
 });
 
-/**
- * @test
- * Ensures a perfectly consistent User-Agent and Client Hint pair results in no penalty.
- */
 it('accepts consistent user agent and client hints', function () {
     $log = VisitLog::factory()->make([
         'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
@@ -153,6 +131,7 @@ it('accepts consistent user agent and client hints', function () {
     $analyzer = new UserAgentAnalyzer();
     
     $params = [
+        'browser_engines' => ['Safari'],
         'ua_regex_patterns' => [
             'chrome' => ['pattern' => 'Chrome', 'requires_verification' => true]
         ],

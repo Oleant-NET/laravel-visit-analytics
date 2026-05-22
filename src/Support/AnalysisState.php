@@ -41,7 +41,7 @@ class AnalysisState
         $this->reasons[] = $reason;
         
         if (!empty($data)) {
-            $this->evidence = array_merge($this->evidence, $data);
+            $this->evidence[$reason] = $data;
         }
     }
 

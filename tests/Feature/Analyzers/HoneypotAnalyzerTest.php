@@ -30,8 +30,8 @@ it('flags visits to defined honeypot paths', function () {
 
     expect($state->getScore())->toBe(100)
         ->and($state->getReasons())->toContain('honeypot_trap')
-        ->and($state->getEvidence())->toHaveKey('matched_trap', '.env')
-        ->and($state->getEvidence())->toHaveKey('honeypot_url', 'https://example.com/.env');
+        ->and($state->getEvidence())->toHaveKey('honeypot_trap.matched_trap', '.env')
+        ->and($state->getEvidence())->toHaveKey('honeypot_trap.honeypot_url', 'https://example.com/.env');
 });
 
 /**

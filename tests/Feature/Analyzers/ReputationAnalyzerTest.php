@@ -73,11 +73,13 @@ it('penalizes repeat offenders based on past detections', function () {
 
     // Score: 3 offenses * 15 points = 45
     expect($state->getScore())->toBe(45)
-        ->and($state->getReasons())->toContain('repeat_offender')
-        ->and($state->getEvidence())->toMatchArray([
+    ->and($state->getReasons())->toContain('repeat_offender')
+    ->and($state->getEvidence())->toMatchArray([
+        'repeat_offender' => [
             'past_offenses_count' => 3,
             'history_window' => "{$hours}h"
-        ]);
+        ]
+    ]);
 });
 
 /**

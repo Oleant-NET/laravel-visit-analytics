@@ -30,7 +30,7 @@ it('flags obsolete windows versions like XP or Vista', function () {
 
     expect($state->getScore())->toBe(75)
         ->and($state->getReasons())->toContain('obsolete_os')
-        ->and($state->getEvidence())->toHaveKey('os_signature', 'Windows NT 5.1');
+        ->and($state->getEvidence())->toHaveKey('obsolete_os.os_signature', 'Windows NT 5.1');
 });
 
 /**
@@ -150,5 +150,5 @@ it('flags obsolete browsers with default weight', function () {
 
     expect($state->getScore())->toBe(35)
         ->and($state->getReasons())->toContain('obsolete_browsers')
-        ->and($state->getEvidence())->toHaveKey('browsers_signature', 'MSIE');
+        ->and($state->getEvidence())->toHaveKey('obsolete_browsers.browsers_signature', 'MSIE');
 });

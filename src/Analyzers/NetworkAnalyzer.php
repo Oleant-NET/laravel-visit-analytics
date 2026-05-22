@@ -82,7 +82,7 @@ class NetworkAnalyzer implements BotAnalyzerInterface
                 return [
                     'score' => 0,
                     'reason' => null,
-                    'evidence' => ['ptr_record' => $host]
+                    'evidence' => []
                 ];
             }
 

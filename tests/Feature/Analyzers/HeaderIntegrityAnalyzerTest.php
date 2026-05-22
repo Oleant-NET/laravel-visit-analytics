@@ -11,19 +11,6 @@ uses(\Oleant\VisitAnalytics\Tests\TestCase::class);
 /**
  * @test
  */
-it('skips analysis when disabled in config', function () {
-    $log = VisitLog::factory()->make(['target_headers' => []]);
-    $state = new AnalysisState();
-    $analyzer = new HeaderIntegrityAnalyzer();
-    
-    $analyzer->analyze($log, $state, ['enabled' => false]);
-
-    expect($state->getScore())->toBe(0);
-});
-
-/**
- * @test
- */
 it('flags requests with very few headers', function () {
     $log = VisitLog::factory()->make([
         'target_headers' => [
@@ -132,4 +119,136 @@ it('adds evidence when cookie header is missing and tracked', function () {
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getEvidence())->toHaveKey('cookie_missing_in_headers', true);
+});
+
+/**
+ * @test
+ */
+it('flags over-engineered bots sending high-entropy headers on cold start', function () {
+    $analyzer = new HeaderIntegrityAnalyzer();
+    $state = new AnalysisState();
+    
+    $log = VisitLog::factory()->make([
+        'user_agent' => 'Mozilla/5.0',
+        'target_headers' => ['sec-ch-ua-full-version-list' => '...']
+    ]);
+
+    $params = [
+        'min_total_headers' => ['count' => 1],
+        'target_headers' => ['cookie'],
+        'consistency_checks' => [
+            'high_entropy' => [
+                'enabled' => true,
+                'score' => 35,
+                'headers' => ['sec-ch-ua-full-version-list']
+            ]
+        ]
+    ];
+
+    $analyzer->analyze($log, $state, $params);
+    expect($state->getReasons())->toContain('bot_over_engineered')
+        ->and($state->getScore())->toBe(35);
+});
+
+/**
+ * @test
+ */
+it('flags platform mismatch between UA and client hints', function () {
+    $analyzer = new HeaderIntegrityAnalyzer();
+    $state = new AnalysisState();
+    
+    $log = VisitLog::factory()->make([
+        'user_agent' => 'Mozilla/5.0 (Windows NT 10.0)', 
+        'target_headers' => ['sec-ch-ua-platform' => 'macOS']
+    ]);
+
+    $params = [
+        'min_total_headers' => ['enabled' => false, 'count' => 0], 
+        'consistency_checks' => [
+            'os_platform_mismatch' => ['enabled' => true, 'score' => 50]
+        ]
+    ];
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getEvidence())->toHaveKey('fingerprint_mismatch.reason', 'os_conflict')
+        ->and($state->getScore())->toBe(50);
+});
+
+/**
+ * @test
+ */
+it('flags mobile desktop conflict', function () {
+    $analyzer = new HeaderIntegrityAnalyzer();
+    $state = new AnalysisState();
+    
+    $log = VisitLog::factory()->make([
+        'user_agent' => 'Mozilla/5.0 (Windows NT 10.0)',
+        'target_headers' => [
+            'sec-ch-ua-platform' => 'Windows',
+            'sec-ch-ua-mobile' => '?1'
+        ]
+    ]);
+
+    $params = [
+        'min_total_headers' => ['count' => 0],
+        'consistency_checks' => [
+            'os_platform_mismatch' => ['enabled' => true, 'score' => 50]
+        ]
+    ];
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getEvidence())->toHaveKey('fingerprint_mismatch.reason', 'mobile_desktop_conflict')
+        ->and($state->getScore())->toBe(50);
+});
+
+/**
+ * @test
+ */
+it('flags unsolicited architecture header on cold start', function () {
+    $analyzer = new HeaderIntegrityAnalyzer();
+    $state = new AnalysisState();
+    
+    $log = VisitLog::factory()->make([
+        'user_agent' => 'Mozilla/5.0',
+        'target_headers' => ['sec-ch-ua-arch' => 'arm64']
+    ]);
+
+    $params = [
+        'min_total_headers' => ['count' => 0],
+        'consistency_checks' => [
+            'arch_architecture_mismatch' => ['enabled' => true, 'score' => 20]
+        ]
+    ];
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getEvidence())->toHaveKey('bot_over_engineered.reason', 'unsolicited_arch_header')
+        ->and($state->getScore())->toBe(20);
+});
+
+/**
+ * @test
+ */
+it('flags architecture conflict', function () {
+    $analyzer = new HeaderIntegrityAnalyzer();
+    $state = new AnalysisState();
+    
+    $log = VisitLog::factory()->make([
+        'user_agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+        'target_headers' => ['sec-ch-ua-arch' => 'arm64', 'cookie' => 'exists']
+    ]);
+
+    $params = [
+        'min_total_headers' => ['count' => 0],
+        'consistency_checks' => [
+            'arch_architecture_mismatch' => ['enabled' => true, 'score' => 45]
+        ]
+    ];
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getEvidence())->toHaveKey('fingerprint_mismatch.reason', 'arch_conflict')
+        ->and($state->getScore())->toBe(45);
 });

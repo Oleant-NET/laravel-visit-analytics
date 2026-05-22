@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-05-22
+
+### Added
+
+- **Deferred Anonymization Pipeline**: Implemented a non-blocking, deferred anonymization system for visit logs. Sensitive IP addresses are now masked automatically after a configurable retention period (defined via `anonymization.retention_minutes`), ensuring GDPR compliance while maintaining data availability for real-time analysis.
+
+- **Enhanced Referer Analysis**: Updated `RefererAnalyzer` to support `Sec-Fetch-Site` metadata. The system now correctly distinguishes between suspicious self-referencing loops and legitimate internal navigation (AJAX, anchor links, same-origin transitions), significantly reducing false positives.
+
+- **RetroAnalysis Safety Layer**: Added automated validation in `RetroAnalysisService` to prevent "lookback" windows from exceeding the configured data retention period. Added warning logging for misconfigurations.
+
+### Changed
+
+- **Database Schema**: 
+    - Added `anonymized_at` column to the `visit_logs` table.
+    - Added an index to `anonymized_at` for high-performance retrieval during deferred processing.
+
+- **Service Architecture**: Refactored `IpAnonymizerService` to support secure IPv4/IPv6 masking with improved regex validation and clear documentation.
+
+- **Optimization**: Optimized `runDeferredAnonymization` using chunked processing to maintain memory efficiency during batch updates.
+
+### Fixed
+
+- **Data Integrity**: Added `whereNull('anonymized_at')` to all retro-analysis queries to ensure that sensitive data processing does not overlap with anonymization tasks.
+
+- **Referer Logic**: Resolved issues where legitimate site interactions were incorrectly flagged as `referer_loop` by implementing strict host-path validation using `parse_url` and contextual header checks.
+
+- **Testing**: Updated test suite to account for the new deferred anonymization lifecycle and updated `RefererAnalyzer` logic to ensure coverage for both legitimate same-origin requests and malicious loops.
+
+---
+
+### Upgrade Guide
+
+> [!IMPORTANT]
+> **Database Migration**: Run `php artisan migrate` to apply the schema changes (adding `anonymized_at` column and index).
+
+- **Configuration**: Ensure `anonymization.retention_minutes` is defined in your `visit-analytics.php` config file.
+- **Reporting Warning**: Please be aware that enabling the anonymization pipeline will mask IP addresses in historical logs after the specified retention period. Ensure your reporting tools are adjusted accordingly to avoid data discrepancies.
+
 ## [2.2.0] - 2026-05-15
 
 ### Added

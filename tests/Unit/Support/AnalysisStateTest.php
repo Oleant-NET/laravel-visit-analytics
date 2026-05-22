@@ -3,43 +3,36 @@
 namespace Oleant\VisitAnalytics\Tests\Unit\Support;
 
 use Oleant\VisitAnalytics\Support\AnalysisState;
-use PHPUnit\Framework\TestCase;
-use PHPUnit\Framework\Attributes\Test;
 
-class AnalysisStateTest extends TestCase
-{
-    #[Test]
-    public function it_accumulates_scores_correctly(): void
-    {
-        $state = new AnalysisState();
-        $state->add(20, 'reason_1');
-        $state->add(30, 'reason_2');
+uses(\Oleant\VisitAnalytics\Tests\TestCase::class);
 
-        $this->assertEquals(50, $state->getScore());
-        $this->assertCount(2, $state->getReasons());
-    }
+it('accumulates scores correctly', function () {
+    $state = new AnalysisState();
+    $state->add(20, 'reason_1');
+    $state->add(30, 'reason_2');
 
-    #[Test]
-    public function it_merges_evidence_data(): void
-    {
-        $state = new AnalysisState();
-        $state->add(10, 'reason', ['key1' => 'val1']);
-        $state->addEvidence('key2', 'val2');
+    expect($state->getScore())->toBe(50)
+        ->and($state->getReasons())->toHaveCount(2);
+});
 
-        $evidence = $state->getEvidence();
-        $this->assertArrayHasKey('key1', $evidence);
-        $this->assertArrayHasKey('key2', $evidence);
-        $this->assertEquals('val1', $evidence['key1']);
-        $this->assertEquals('val2', $evidence['key2']);
-    }
+it('merges evidence data', function () {
+    $state = new AnalysisState();
+    
+    $state->add(10, 'reason', ['key1' => 'val1']);
 
-    #[Test]
-    public function it_tracks_official_bot_status(): void
-    {
-        $state = new AnalysisState();
-        $this->assertFalse($state->isOfficialBot);
-        
-        $state->isOfficialBot = true;
-        $this->assertTrue($state->isOfficialBot);
-    }
-}
+    $state->addEvidence('key2', 'val2');
+
+    $evidence = $state->getEvidence();
+
+    expect($evidence)->toHaveKey('reason.key1', 'val1')
+        ->and($evidence)->toHaveKey('key2', 'val2');
+});
+
+it('tracks official bot status', function () {
+    $state = new AnalysisState();
+    
+    expect($state->isOfficialBot)->toBeFalse();
+    
+    $state->isOfficialBot = true;
+    expect($state->isOfficialBot)->toBeTrue();
+});

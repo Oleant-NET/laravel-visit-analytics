@@ -112,33 +112,6 @@ it('provides output when --full flag is used', function () {
 
 /**
  * @test
- * Verifies that the command anonymizes the IP address in async mode.
- */
-it('anonymizes the ip address when running in async mode', function () {
-    // 1. Set config to async mode
-    config([
-        'visit-analytics.collection.anonymize_ip' => true,
-        'visit-analytics.collection.anonymize_mode' => 'async'
-    ]);
-
-    // 2. Create a log with a full IP
-    $log = VisitLog::create([
-        'ip_address' => '1.2.3.4',
-        'user_agent' => 'Test',
-        'url' => '/',
-        'processed_at' => null
-    ]);
-
-    // 3. Execute the command
-    $this->artisan('visit-analytics:analyze-bots');
-
-    // 4. Assert the IP is now anonymized in the database
-    $log->refresh();
-    expect($log->ip_address)->toBe('1.2.3.0');
-});
-
-/**
- * @test
  * Verifies that the command leaves the IP intact if anonymize_ip is disabled.
  */
 it('does not anonymize the ip if the feature is disabled', function () {

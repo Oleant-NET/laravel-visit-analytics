@@ -49,7 +49,7 @@ it('adds penalty points if UA is a known botnet', function () {
      * Assert that the evidence was recorded correctly.
      * Based on AnalysisState::addEvidence(string $key, mixed $value)
      */
-    expect($state->evidence)->toHaveKey('known_botnet', 100);
+    expect($state->getEvidence())->toHaveKey('botnet_match.points_awarded', 100);
 });
 
 /**

@@ -10,36 +10,51 @@ return [
     'collection' => [
 
         /**
-         * IP Anonymization
-         * 
-         * If enabled, the last octet of IPv4 (or the last 80 bits of IPv6) 
-         * will be masked before saving to the database. 
-         * Highly recommended for GDPR/DSGVO compliance.
+         * Anonymization settings for GDPR/DSGVO compliance.
+         * * These settings control how and when visitor IP addresses are masked
+         * to protect user privacy after the analysis process is complete.
          */
-        'anonymize_ip' => env('VISIT_ANALYTICS_ANONYMIZE_IP', true),
+        'anonymization' => [
+            /**
+             * IP Anonymization
+             * 
+             * If enabled, the last octet of IPv4 (or the last 80 bits of IPv6) 
+             * will be masked before saving to the database. 
+             * Highly recommended for GDPR/DSGVO compliance.
+             */
+            'anonymize_ip' => env('VISIT_ANALYTICS_ANONYMIZE_IP', true),
 
-        /**
-         * IP Anonymization Mode
-         *
-         * 'sync'  - Anonymize IP immediately in Middleware. High privacy, less data for analysis.
-         * 'async' - Anonymize IP later via Cron after bot analysis. High precision, temporary PII storage.
-         *
-         * Default: 'sync'
-         */
-        'anonymize_mode' => env('VISIT_ANALYTICS_ANONYMIZE_MODE', 'sync'),
+            /**
+             * IP Anonymization Mode
+             *
+             * 'sync'  - Anonymize IP immediately in Middleware. High privacy, less data for analysis.
+             * 'async' - Anonymize IP later via Cron after bot analysis. High precision, temporary PII storage.
+             *
+             * Default: 'sync'
+             */
+            'anonymize_mode' => env('VISIT_ANALYTICS_ANONYMIZE_MODE', 'sync'),
 
-        /**
-         * Anonymize Detected Bots
-         *
-         * If true, even logs identified as bots will be anonymized after analysis.
-         * If false, full IP addresses of bots will be preserved for security 
-         * purposes (e.g., for manual blacklisting or Fail2Ban integration).
-         *
-         * Note: Setting this to 'false' may require a mention in your Privacy Policy.
-         * Default: true
-         */
-        'anonymize_bots' => env('VISIT_ANALYTICS_ANONYMIZE_BOTS', true),
+            /**
+             * Anonymize Detected Bots
+             *
+             * If true, even logs identified as bots will be anonymized after analysis.
+             * If false, full IP addresses of bots will be preserved for security 
+             * purposes (e.g., for manual blacklisting or Fail2Ban integration).
+             *
+             * Note: Setting this to 'false' may require a mention in your Privacy Policy.
+             * Default: true
+             */
+            'anonymize_bots' => env('VISIT_ANALYTICS_ANONYMIZE_BOTS', true),
 
+            /**
+             * The retention period in minutes for keeping raw IP addresses.
+             * * Raw IP addresses are stored for this duration to allow retroactive 
+             * analysis, botnet cluster detection, and behavioral pattern recognition. 
+             * Once this period expires, IPs will be irreversibly masked.
+             * * Default: 30 minutes.
+             */
+            'anonymize_retention_minutes' => env('VISIT_ANALYTICS_ANONYMIZE_RETENTION_MINUTES', 30),
+        ],
         /**
          * Query Parameter Whitelist
          * 
@@ -149,10 +164,29 @@ return [
             'sec-ch-ua-platform',
 
             /**
+             * Client Hints: Indicates if the user is on a mobile device.
+             * Essential for differentiating mobile traffic from desktop-emulated bots.
+             */
+            'sec-ch-ua-mobile',
+
+            /**
+             * Fetch Metadata: Describes the relationship between the request 
+             * initiator's origin and the target resource's origin.
+             */
+            'sec-fetch-site',
+
+            /**
              * Fetch Metadata: Indicates the request's destination (e.g., 'document', 'empty').
              * Critical for detecting headless browsers making atypical requests.
              */
             'sec-fetch-dest',
+
+            /**
+             * Fetch Metadata: Specifies the request mode (e.g., 'cors', 'navigate').
+             * Helps distinguish between top-level navigation and background API/resource fetching.
+             */
+            'sec-fetch-mode',
+
 
             /**
              * Preferred languages of the user. 
@@ -169,12 +203,42 @@ return [
             'accept-encoding',
             
             /**
-             * Fetch Metadata: Describes the relationship between the request 
-             * initiator's origin and the target resource's origin.
+             * Used to identify Ajax requests (XMLHttpRequest).
+             * Commonly sent by JavaScript frameworks (like Axios or jQuery).
+             * Legitimate direct navigations omit this, but generic headless 
+             * bots or API scrapers sometimes fake or misconfigure it.
              */
-            'sec-fetch-site',
-
             'x-requested-with',
+
+            /**
+             * Client Hints (High-Entropy): The exact version of the operating system.
+             * Legitimate browsers only send this after an 'Accept-CH' challenge. 
+             * If present on the very first "cold" request, it strongly indicates 
+             * an over-engineered bot spoofing its fingerprint.
+             */
+            'sec-ch-ua-platform-version',
+
+            /**
+             * Client Hints (High-Entropy): The device model (e.g., 'Pixel 6' or '').
+             * For desktop browsers, it is usually empty. If a desktop User-Agent 
+             * comes with a populated mobile model name (or vice versa), it is a 
+             * dead giveaway of an inconsistent bot fingerprint.
+             */
+            'sec-ch-ua-model',
+
+            /**
+             * Client Hints (High-Entropy): The underlying device architecture (e.g., 'x86' or 'arm').
+             * Extremely useful for cross-verifying against the CPU info found in 
+             * the User-Agent string to detect poorly randomized fake headers.
+             */
+            'sec-ch-ua-arch',
+
+            /**
+             * Client Hints (High-Entropy): The complete list of brands and full versions.
+             * While 'sec-ch-ua' only gives the major version (e.g., '143'), this header 
+             * contains the full build version. Essential for future advanced telemetry.
+             */
+            'sec-ch-ua-full-version-list',
         ],
 
     ],
@@ -262,23 +326,65 @@ return [
                      */
                     'min_total_headers' => [
                         'count' => 5,
-                        'score' => 40,
+                        'score' => 30,
                     ],
 
                     /**
                      * Weighted Mandatory Headers
-                     * 
-                     * Specific headers and their respective threat scores if missing.
+                     * * Specific headers and their respective threat scores if missing.
                      * 'sec-ch-' headers are automatically skipped for non-Chromium browsers
                      * to avoid false positives.
                      */
                     'weights' => [
-                        'accept-language'    => 25, // Legitimate users almost always have a locale
-                        'accept-encoding'    => 30, // Standard browsers always support compression (gzip/br)
-                        'sec-fetch-dest'     => 40, // Modern Fetch Metadata (Chrome 80+, Firefox 90+)
-                        'sec-fetch-site'     => 40, // Helps identify request origin relationship
-                        'sec-ch-ua'          => 45, // Essential for modern Chromium identification
-                        'sec-ch-ua-platform' => 30, // Essential for cross-verifying OS with User-Agent
+                        'accept-language'      => 15, // Legitimate users almost always have a locale
+                        'accept-encoding'      => 10, // Standard browsers always support compression
+                        'sec-fetch-dest'       => 5, // Modern Fetch Metadata (Chrome 80+, Firefox 90+)
+                        'sec-fetch-site'       => 5, // Helps identify request origin relationship
+                        'sec-fetch-mode'       => 5, // Verifies the request mode
+                        'sec-ch-ua'            => 15, // Essential for modern Chromium identification
+                        'sec-ch-ua-platform'   => 5, // Essential for cross-verifying OS
+                        'sec-ch-ua-mobile'     => 5, // Essential for cross-verifying device type
+                    ],
+
+                    /**
+                     * Consistency & Cross-Verification Checks
+                     * * Logic to detect bot spoofing by identifying logical conflicts 
+                     * between the User-Agent string and the provided Client Hints.
+                     */
+                    'consistency_checks' => [
+                        
+                        /**
+                         * High-Entropy Header Detection
+                         * Detects bots that over-engineer their fingerprint by sending 
+                         * high-entropy hints on the very first (cold) request.
+                         */
+                        'high_entropy' => [
+                            'enabled' => true,
+                            'score'   => 20,
+                            'headers' => [
+                                'sec-ch-ua-platform-version',
+                                'sec-ch-ua-full-version-list',
+                                'sec-ch-ua-model',
+                            ],
+                        ],
+
+                        /**
+                         * Platform Consistency
+                         * Cross-verifies OS signals between User-Agent and sec-ch-ua-platform.
+                         */
+                        'os_platform_mismatch' => [
+                            'enabled' => true,
+                            'score'   => 50,
+                        ],
+
+                        /**
+                         * Architecture Consistency
+                         * Validates CPU architecture consistency (e.g., x86 vs arm).
+                         */
+                        'arch_architecture_mismatch' => [
+                            'enabled' => true,
+                            'score'   => 25,
+                        ],
                     ],
                 ],
             ],
@@ -295,14 +401,20 @@ return [
                 'class'   => \Oleant\VisitAnalytics\Analyzers\UserAgentAnalyzer::class,
                 'params'  => [
                     
-                    /**
-                     * Suspicious Keywords (Substrings)
-                     * Scanned via mb_stripos for quick library/tool identification.
-                     */
-                    'suspicious_ua' => [
-                        'Headless', 'python-requests', 'GuzzleHttp', 'curl', 'wget', 
-                        'Go-http-client', 'Java/', 'Bun/', 'Ruby', 'php-requests',
-                        'Cortex-Xpanse', 'Palo Alto Networks', 'CFNetwork',
+                    /*
+                    * List of legitimate browser rendering engine identifiers.
+                    * Modern browsers consistently include one of these in their User-Agent strings
+                    * to ensure compatibility and feature detection.
+                    */
+                    'browser_engines' => [
+                        'AppleWebKit', // Chrome, Safari, Edge, Opera, Brave, Vivaldi
+                        'Gecko',       // Firefox, Thunderbird, SeaMonkey
+                        'Trident',     // IE 11 and older (legacy support)
+                        'Blink',       // Modern Chrome/Edge engine
+                        'KHTML',       // Historical engine (WebKit ancestor)
+                        'Presto',      // Legacy Opera
+                        'Goanna',      // Pale Moon browser engine
+                        'Servo',       // Experimental/modern engine (e.g., Firefox components)
                     ],
 
                     /**
@@ -542,10 +654,12 @@ return [
                         'enabled' => true,
                         'no_referer_window_minutes' => 10,
                         'no_referer_increment'      => 20, // Extra points per repeated hit
+                        'session_window' => fn() => config('visit-analytics.retro_analysis.session_window', 60),
                     ],
 
                     'weights' => [
-                        /** * Base penalty for missing Referer header.
+                        /** 
+                         * Base penalty for missing Referer header.
                          */
                         'no_referer'   => 35,
 
@@ -559,6 +673,7 @@ return [
                          */
                         'referer_loop' => 50,
                     ],
+                  
                 ],
             ],
 
@@ -774,4 +889,5 @@ return [
             'mark_as_bot_score' => 100,
         ],
     ],
+
 ];
