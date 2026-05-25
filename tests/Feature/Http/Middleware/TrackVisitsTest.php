@@ -6,7 +6,6 @@ use Oleant\VisitAnalytics\Models\VisitLog;
 use Illuminate\Support\Facades\Route;
 use Oleant\VisitAnalytics\Http\Middleware\TrackVisits;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
     VisitLog::truncate();
@@ -15,12 +14,12 @@ beforeEach(function () {
         return 'OK';
     })->middleware(TrackVisits::class);
 
-    config(['visit-analytics.collection' => [
+    config(['visit-analytics.collection.anonymization' => [
         'anonymize_ip' => true,
         'anonymize_mode' => 'sync',
         'cookie_mode' => 'exists',
         'target_headers' => ['user-agent', 'accept-language', 'cookie'],
-        'whitelist' => ['utm_source', 'utm_medium'],
+        'whitelist_params' => ['utm_source', 'utm_medium'],
         'exclude' => [
             'paths' => [],
             'ips' => [],
@@ -33,7 +32,6 @@ beforeEach(function () {
 /**
  * Functional Tracking Tests
  */
-
 it('records a visit in the database', function () {
     $this->get('/test-page')->assertOk();
     expect(VisitLog::count())->toBe(1);

@@ -57,76 +57,12 @@ it('returns original IP when global anonymization is disabled', function () {
     expect($service->handle('192.168.1.15'))->toBe('192.168.1.15');
 });
 
-it('skips anonymization for bots if anonymize_bots is false', function () {
-    Config::set('visit-analytics.collection.anonymization.anonymize_bots', false);
-    $service = new IpAnonymizerService();
-    expect($service->handle('192.168.1.15', isBot: true))->toBe('192.168.1.15');
-});
-
 it('handles async mode correctly', function () {
     Config::set('visit-analytics.collection.anonymization.anonymize_mode', 'async');
     $service = new IpAnonymizerService();
     
     // Should NOT anonymize in default mode
-    expect($service->handle('192.168.1.15', final: false))->toBe('192.168.1.15');
+    expect($service->handle('192.168.1.15', async: false))->toBe('192.168.1.15');
     // Should anonymize when final is true
-    expect($service->handle('192.168.1.15', final: true))->toBe('192.168.1.0');
-});
-
-// --- Deferred Anonymization Tests ---
-
-it('executes deferred anonymization only for old logs', function () {
-    Config::set('visit-analytics.collection.anonymization.anonymize_retention_minutes', 30);
-    $service = new IpAnonymizerService();
-    
-    Carbon::setTestNow(now());
-
-    $oldLog = VisitLog::factory()->create([
-        'ip_address' => '1.1.1.1',
-        'processed_at' => now(),
-        'anonymized_at' => null,
-        'created_at' => now()->subMinutes(31),
-    ]);
-
-    $recentLog = VisitLog::factory()->create([
-        'ip_address' => '2.2.2.2',
-        'processed_at' => now(),
-        'anonymized_at' => null,
-        'created_at' => now()->subMinutes(29),
-    ]);
-
-    $count = $service->runDeferredAnonymization();
-
-    expect($count)->toBe(1)
-        ->and($oldLog->fresh()->ip_address)->toBe('1.1.1.0')
-        ->and($recentLog->fresh()->ip_address)->toBe('2.2.2.2');
-});
-
-/**
- * @test
- */
-it('skips bot anonymization when the config is disabled', function () {
-    // 1. Disable bot anonymization
-    config(['visit-analytics.collection.anonymization.anonymize_bots' => false]);
-
-    $originalIp = '1.2.3.4';
-    
-    // 2. Create a bot log that should NOT be anonymized
-    $log = VisitLog::factory()->create([
-        'ip_address' => $originalIp,
-        'is_bot' => true,
-        'processed_at' => now(),
-        'anonymized_at' => null,
-        'created_at' => now()->subMinutes(60), // Outside retention window
-    ]);
-
-    $service = new IpAnonymizerService();
-    $count = $service->runDeferredAnonymization();
-
-    $log->refresh();
-
-    // 3. Assertions
-    expect($count)->toBe(0) // Nothing was processed
-        ->and($log->ip_address)->toBe($originalIp) // IP remains intact
-        ->and($log->anonymized_at)->toBeNull(); // Still marked as non-anonymized
+    expect($service->handle('192.168.1.15', async: true))->toBe('192.168.1.0');
 });

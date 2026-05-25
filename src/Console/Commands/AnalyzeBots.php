@@ -5,8 +5,7 @@ namespace Oleant\VisitAnalytics\Console\Commands;
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Services\BotAnalysisService;
 use Oleant\VisitAnalytics\Services\RetroAnalysisService;
-use Oleant\VisitAnalytics\Services\BotnetService;
-use Oleant\VisitAnalytics\Services\IpAnonymizerService;
+use Oleant\VisitAnalytics\Services\FullAnonymizerService;
 use Illuminate\Console\Command;
 
 /**
@@ -52,15 +51,13 @@ class AnalyzeBots extends Command
      *
      * @param BotAnalysisService $botAnalysisService
      * @param RetroAnalysisService $retroService
-     * @param BotnetService $botnetService
-     * @param IpAnonymizerService $ipAnonymizerService
+     * @param FullAnonymizerService $fullAnonymizerService
      * @return int
      */
     public function handle(
         BotAnalysisService $botAnalysisService, 
         RetroAnalysisService $retroService, 
-        BotnetService $botnetService,
-        IpAnonymizerService $ipAnonymizerService
+        FullAnonymizerService $fullAnonymizerService
     ): int {
         $maxTotal = (int) $this->option('max');
         $isFull = (bool) $this->option('full');
@@ -69,7 +66,6 @@ class AnalyzeBots extends Command
         $processedCount = 0;
         $botsDetected = 0;
         $retroactiveHits = 0;
-        $newBotnetsDetected = 0;
 
         if ($isFull) {
             $this->printStartupInfo($maxTotal, $threshold);
@@ -82,9 +78,16 @@ class AnalyzeBots extends Command
                 $startTime = microtime(true);
                 $newLookups = 0;
 
-                foreach ($logs as $log) {
+                foreach ($logs as &$log) {
                     if ($processedCount >= $maxTotal) {
                         return false;
+                    }
+
+                    $log->refresh();
+                    if ($log->processed_at !== null) {
+                        $processedCount++;
+                        $botsDetected++;
+                        continue;
                     }
 
                     // Perform behavioral analysis using the DTO-based service
@@ -129,16 +132,13 @@ class AnalyzeBots extends Command
             
             // Standard retroactive cleanup
             $retroactiveHits = $retroService->handle();
-
-            // Detect distributed botnet clusters based on UA/IP patterns
-            $newBotnetsDetected = $botnetService->detectNewClusters();
         }
 
-        // 3. Anonymization IPs
-        $anonymizedIps = $ipAnonymizerService->runDeferredAnonymization();
+        // 3. Anonimization IP | UA | Headers | Fingerprint
+        $anonymized = $fullAnonymizerService->runDeferredAnonymization();
 
         // 4. Final Reporting
-        $this->reportResults($processedCount, $botsDetected, $retroactiveHits, $newBotnetsDetected, $anonymizedIps, $isFull);
+        $this->reportResults($processedCount, $botsDetected, $retroactiveHits, $anonymized, $isFull);
 
         return self::SUCCESS;
     }
@@ -148,11 +148,10 @@ class AnalyzeBots extends Command
      * * @param int $processed
      * @param int $bots
      * @param int $retroactive
-     * @param int $newBotnets
      * @param bool $isFull
      * @return void
      */
-    protected function reportResults(int $processed, int $bots, int $retroactive, int $newBotnets, int $anonymizedIps, bool $isFull): void
+    protected function reportResults(int $processed, int $bots, int $retroactive, int $anonymized, bool $isFull): void
     {
         $rate = $processed > 0 ? round(($bots / $processed) * 100, 2) : 0;
         $timestamp = now()->format('Y-m-d H:i:s');
@@ -165,13 +164,12 @@ class AnalyzeBots extends Command
                 ['Bots Detected', $bots],
                 ['Detection Rate', $rate . '%'],
                 ['Retroactive Hits', $retroactive],
-                ['New Botnet Clusters', $newBotnets],
-                ['Anonymized IPs', $anonymizedIps],
+                ['Anonymized Records', $anonymized],
             ]);
         } else {
             $this->line(sprintf(
-                "[%s] OK: %d | Bots: %d (%s%%) | Retro: %d | New Botnets: %d | Anonymized: %d",
-                $timestamp, $processed, $bots, $rate, $retroactive, $newBotnets, $anonymizedIps
+                "[%s] OK: %d | Bots: %d (%s%%) | Retro: %d | Anonymized: %d",
+                $timestamp, $processed, $bots, $rate, $retroactive, $anonymized
             ));
         }
     }

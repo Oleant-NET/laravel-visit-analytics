@@ -153,33 +153,41 @@ class TrackVisits
     protected function logVisit(Request $request): void
     {
         try {
-
             $ip = $request->ip();
 
             /** @var \Oleant\VisitAnalytics\Services\IpAnonymizerService $anonymizer */
             $anonymizer = app(\Oleant\VisitAnalytics\Services\IpAnonymizerService::class);
             $ip = $anonymizer->handle($request->ip());
 
-            $whitelist = $this->config['whitelist'] ?? [];
+            $whitelist = $this->config['whitelist_params'] ?? [];
             
             $payload = array_intersect_key(
                 $request->query(), 
                 array_flip($whitelist)
             );
 
+            // Prepare headers for the log and for fingerprint generation
+            $targetHeaders = $this->extractTargetHeaders($request);
+
+            // Generate fingerprint hash based on User-Agent and extracted headers
+            // We use a consistent string representation for the hash input
+            $fingerprintInput = $request->userAgent() . '|' . json_encode($targetHeaders);
+            $fingerprintHash = hash('sha256', $fingerprintInput);
+
             VisitLog::create([
-                'ip_address' => $ip,
-                'user_agent' => $request->userAgent(),
-                'target_headers' => $this->extractTargetHeaders($request),
-                'url'        => $request->fullUrl(),
-                'referer'    => $request->headers->get('referer'),
-                'payload'    => $payload ?: null,
-                'created_at' => now(),
+                'ip_address'     => $ip,
+                'user_agent'     => $request->userAgent(),
+                'target_headers' => $targetHeaders,
+                'fingerprint_hash' => $fingerprintHash, // Added fingerprint field
+                'url'            => $request->fullUrl(),
+                'referer'        => $request->headers->get('referer'),
+                'payload'        => $payload ?: null,
+                'created_at'     => now(),
             ]);
         } catch (\Throwable $e) {
             // We catch all errors but do nothing to ensure the main app 
             // stays functional even if analytics DB fails.
-            // Optional: \Log::error($e->getMessage());
+            throw $e;
         }
     }
 

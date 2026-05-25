@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.0] - 2026-05-25
+
+### Breaking Changes
+- **Database Schema:** Removed `botnet_fingerprints` table.
+- **Migration Required:** - Run `Schema::dropIfExists('botnet_fingerprints');` to clean up the obsolete storage.
+  - Add `fingerprint_hash` index to `visit_logs` for real-time lookups:
+    ```php
+    Schema::table('visit_logs', function (Blueprint $table) {
+        $table->string('fingerprint_hash', 64)->nullable()->index()->after('id');
+    });
+    ```
+- **Configuration:** Added `anonymization` block to `config/visit-analytics.php`. Ensure you publish the new config:
+  `php artisan vendor:publish --tag=visit-analytics-config`
+
+### Added
+- **`FingerprintAnonymizerService`:** Real-time data sanitization (UA stripping, header key-only mode).
+- **`BotnetAnalyzer`:** Real-time cluster detection based on high-frequency fingerprint occurrences across distinct IPs.
+- **Middleware `TrackVisits`:** Now generates and persists unique `fingerprint_hash` for smarter bot tracking.
+
+### Changed
+- **Core Detection Logic:** Switched from static User-Agent matching to multi-factor "digital skeleton" analysis (UA + Client Hints).
+- **Architecture:** Transitioned from historical database lookups to an "in-memory" (within current time window) analysis strategy.
+
+### Privacy-First
+- Logs are now transformed into non-identifiable statistical aggregates, ensuring compliance by design.
+
 ## [2.3.0] - 2026-05-22
 
 ### Added

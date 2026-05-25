@@ -30,6 +30,7 @@ class VisitLog extends Model
         'ip_address',
         'user_agent',
         'target_headers',
+        'fingerprint_hash',
         'url',
         'referer',
         'payload',

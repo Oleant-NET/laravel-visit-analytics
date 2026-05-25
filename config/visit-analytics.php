@@ -25,6 +25,33 @@ return [
             'anonymize_ip' => env('VISIT_ANALYTICS_ANONYMIZE_IP', true),
 
             /**
+             * User Agent Anonymization
+             * * If enabled, the 'user_agent' field will be cleared or truncated
+             * after the retention period, removing browser-specific fingerprints.
+             */
+            'anonymize_ua' => env('VISIT_ANALYTICS_ANONYMIZE_UA', true),
+
+            /**
+             * Request Headers Anonymization
+             * * If enabled, request headers stored in the logs will be cleared
+             * after the retention period to prevent tracking via unique header combinations.
+             */
+            'anonymize_headers' => env('VISIT_ANALYTICS_ANONYMIZE_HEADERS', true),
+
+            /**
+             * Fingerprint Hash Anonymization
+             * * If enabled, the 'fingerprint_hash' field will be replaced with the 
+             * defined placeholder after the retention period, ensuring that 
+             * individual user sessions cannot be tracked over long periods.
+             */
+            'anonymize_fingerprint_hash' => env('VISIT_ANALYTICS_ANONYMIZE_FINGERPRINT_HASH', true),
+
+            /**
+             * Placeholder for anonymized fingerprint hashes.
+             */
+            'fingerprint_placeholder' => 'anonym-sha256-ready',
+            
+            /**
              * IP Anonymization Mode
              *
              * 'sync'  - Anonymize IP immediately in Middleware. High privacy, less data for analysis.
@@ -55,6 +82,7 @@ return [
              */
             'anonymize_retention_minutes' => env('VISIT_ANALYTICS_ANONYMIZE_RETENTION_MINUTES', 30),
         ],
+        
         /**
          * Query Parameter Whitelist
          * 
@@ -239,6 +267,15 @@ return [
              * contains the full build version. Essential for future advanced telemetry.
              */
             'sec-ch-ua-full-version-list',
+        ],
+
+        /**
+         * Desktop/Mobile-Platform, Popular Browsers in User-Agent-String
+         */
+        'user_agent_parsing' => [
+            'desktop-platforms' => ['Windows', 'Macintosh', 'Linux'],
+            'mobile_platforms' => ['Android', 'iPhone', 'iPad', 'Windows Phone', 'BlackBerry'],
+            'browsers' => ['Firefox', 'Chrome', 'Safari', 'Edge', 'Opera', 'MSIE', 'Trident'],
         ],
 
     ],
@@ -792,56 +829,51 @@ return [
             ],
 
             /**
-             * Botnet Cluster Detection (v2.2.0)
-             * * Identifies distributed botnets by finding different IPs using the 
-             * same User-Agent with high request density. This analyzer works 
-             * in two modes:
-             * 1. Real-time: Fast lookup in the botnet_fingerprints table.
-             * 2. Retroactive: Deep SQL analysis to identify and store new clusters.
+             * Botnet Cluster Detection
+             * * Identifies distributed botnets by detecting multiple IPs 
+             * * sharing the same HTTP fingerprint within a short time window.
+             * * Redis-based, stateless and GDPR-compliant (no long-term tracking).
              */
             'botnet' => [
                 'enabled' => true,
-                'class'   => \Oleant\VisitAnalytics\Analyzers\BotnetReputationAnalyzer::class,
+                'class'   => \Oleant\VisitAnalytics\Analyzers\BotnetAnalyzer::class, // Переименованный класс
                 'params'  => [
                     
                     // --- Cluster Identification Thresholds ---
                     
                     /**
-                     * Minimum number of unique IPs for the same UA to be flagged as a botnet.
+                     * Minimum number of unique IPs sharing the same Fingerprint 
+                     * to trigger a botnet cluster flag.
                      */
-                    'ip_threshold' => (int) env('VISIT_ANALYTICS_BOTNET_IP_THRESHOLD', 10),
+                    'ip_cluster_threshold' => (int) env('VISIT_ANALYTICS_BOTNET_IP_THRESHOLD', 5),
 
                     /**
-                     * Minimum total hits for the same UA within the analysis window.
+                     * Time-to-live for Redis fingerprint records (seconds).
+                     * Defines how long we remember a fingerprint's association 
+                     * with a specific IP cluster.
                      */
-                    'hits_threshold' => (int) env('VISIT_ANALYTICS_BOTNET_HITS_THRESHOLD', 50),
+                    'redis_ttl' => (int) env('VISIT_ANALYTICS_BOTNET_REDIS_TTL', 3600),
 
                     /**
-                     * Time window in hours for the retroactive cluster detection.
-                     * (0.16 = ~10 minutes, 1 = 1 hour, 24 = 1 day)
+                     * The analysis window in minutes for the periodic analyzer.
+                     * (e.g., 10 minutes matches your cron frequency).
                      */
-                    'analysis_window_hours' => (float) env('VISIT_ANALYTICS_BOTNET_WINDOW', 24),
+                    'analysis_window_minutes' => (int) env('VISIT_ANALYTICS_BOTNET_WINDOW_MIN', 10),
 
-                    // --- Performance & Whitelisting ---
-
-                    /**
-                     * Throttling for 'last_seen_at' updates in the DB (seconds).
-                     * Prevents excessive writes during heavy botnet attacks.
-                     */
-                    'update_throttle' => 300,
+                    // --- Performance & Safety ---
 
                     /**
-                     * Dynamic reference to the explicit bots list.
-                     * This ensures we NEVER flag official search engines as botnets.
+                     * List of official bots/crawlers (IP ranges or UA patterns)
+                     * that are exempted from the cluster detection logic.
                      */
-                    'ignore_patterns' => fn() => config('visit-analytics.detection_engine.analyzers.explicit_bots.params.explicit_bots', []),
+                    'whitelist_patterns' => fn() => config('visit-analytics.detection_engine.analyzers.explicit_bots.params.explicit_bots', []),
 
                     'weights' => [
                         /**
-                         * Penalty for a visit that matches a known botnet fingerprint.
-                         * Usually 100 to trigger immediate bot classification.
+                         * Penalty added to bot_score when a Fingerprint is 
+                         * linked to multiple different IP addresses.
                          */
-                        'known_botnet' => 100,
+                        'cluster_anomaly_weight' => 100,
                     ],
                 ],
             ],
