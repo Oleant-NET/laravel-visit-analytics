@@ -19,6 +19,7 @@ class BehaviorAnalyzer implements BotAnalyzerInterface
         $this->checkRateLimit($log, $state, $params);
         $this->checkNavigationFlow($log, $state, $params);
         $this->checkUserAgentStability($log, $state, $params);
+        $this->checkHeaderSetStability($log, $state, $params);
     }
 
     /**
@@ -285,6 +286,39 @@ class BehaviorAnalyzer implements BotAnalyzerInterface
                     'previous_ua' => $differentUA->user_agent,
                     'current_ua'  => $log->user_agent,
                     'time_diff'   => $differentUA->created_at->diffForHumans($log->created_at),
+                ]
+            );
+        }
+    }
+
+    /**
+     * Detects changes to the fingerprint for a single IP address.
+     * Real browsers maintain a stable set of headers throughout a session.
+     */
+    protected function checkHeaderSetStability(VisitLog $log, AnalysisState $state, array $params):void 
+    {
+        $window = (int)($params['header_stability_window'] ?? 30); // Minutes
+
+        $from = $this->ensureCarbon($log->created_at)->copy()->subMinutes($window);
+
+        $differentFingerprint = VisitLog::query()
+            ->where('ip_address', $log->ip_address)
+            ->where('id', '<', $log->id)
+            ->where('created_at', '>=', $from)
+            ->where('fingerprint_hash', '!=', $log->fingerprint_hash)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($differentFingerprint) {
+            $weight = (int)($params['weights']['header_set_anomaly'] ?? 30);
+
+            $state->add(
+                $weight,
+                'header_set_anomaly',
+                [
+                    'time_diff'     => $differentFingerprint->created_at->diffForHumans($log->created_at),
+                    'prev_keys'     => is_array($differentFingerprint->target_headers) ? array_keys($differentFingerprint->target_headers) : [],
+                    'curr_keys'     => is_array($log->target_headers) ? array_keys($log->target_headers) : [],
                 ]
             );
         }

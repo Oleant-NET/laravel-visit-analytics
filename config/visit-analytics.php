@@ -729,9 +729,10 @@ return [
                      * Rate Limiting (Frequency)
                      * 'time_window' is the period in minutes to calculate the rate.
                      */
-                    'time_window'           => 5,  // Minutes
-                    'rate_limit_per_minute' => 60, // Max allowed requests per minute
-                    'ua_stability_window'   => 30, // Minutes
+                    'time_window'               => 5,  // Minutes
+                    'rate_limit_per_minute'     => 60, // Max allowed requests per minute
+                    'ua_stability_window'       => 30, // Minutes
+                    'header_stability_window'   => 30, // Minutes
 
 
                     /**
@@ -760,6 +761,7 @@ return [
                         'rate'              => 30, // Score for exceeding rate limit
                         'speed_anomaly'     => 20, // Score for inhumanly fast clicks
                         'ua_change_anomaly' => 40, // Score for change UA 
+                        'header_set_anomaly'=> 30, // Score for change Headers Set
                     ],
                 ],
             ],

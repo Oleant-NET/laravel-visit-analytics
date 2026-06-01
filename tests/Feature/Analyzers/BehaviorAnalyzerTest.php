@@ -186,3 +186,64 @@ test('it does not flag normal AJAX requests', function () {
     expect($state->getScore())->toBe(0)
         ->and($state->getReasons())->not->toContain('speed_anomaly');
 });
+
+test('it flags header set anomaly when fingerprint changes for same ip', function () {
+    $ip = '7.7.7.7';
+    
+    // Предыдущий визит с другим отпечатком
+    VisitLog::factory()->create([
+        'ip_address' => $ip,
+        'fingerprint_hash' => 'hash_a',
+        'target_headers' => ['user-agent' => 'Browser A'],
+        'created_at' => now()->subMinutes(5)
+    ]);
+
+    // Текущий визит с новым отпечатком
+    $log = VisitLog::factory()->create([
+        'ip_address' => $ip,
+        'fingerprint_hash' => 'hash_b',
+        'target_headers' => ['user-agent' => 'Browser B', 'cookie' => 'val=1'],
+        'created_at' => now()
+    ]);
+
+    $state = new AnalysisState();
+    $analyzer = new BehaviorAnalyzer();
+
+    $params = getBaseParams();
+    $params['weights']['header_set_anomaly'] = 30;
+    $params['header_stability_window'] = 30;
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getReasons())->toContain('header_set_anomaly')
+        ->and($state->getScore())->toBe(30)
+        ->and($state->getEvidence()['header_set_anomaly']['curr_keys'])->toContain('cookie');
+});
+
+test('it does not flag header set anomaly when fingerprint remains stable', function () {
+    $ip = '8.8.8.8';
+    $hash = 'stable_hash';
+
+    VisitLog::factory()->create([
+        'ip_address' => $ip,
+        'fingerprint_hash' => $hash,
+        'created_at' => now()->subMinutes(5)
+    ]);
+
+    $log = VisitLog::factory()->create([
+        'ip_address' => $ip,
+        'fingerprint_hash' => $hash,
+        'created_at' => now()
+    ]);
+
+    $state = new AnalysisState();
+    $analyzer = new BehaviorAnalyzer();
+
+    $params = getBaseParams();
+    $params['weights']['header_set_anomaly'] = 30;
+
+    $analyzer->analyze($log, $state, $params);
+
+    expect($state->getReasons())->not->toContain('header_set_anomaly')
+        ->and($state->getScore())->toBe(0);
+});
