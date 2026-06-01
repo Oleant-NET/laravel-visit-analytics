@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.0] - 2026-06-01
+### Added
+- **Header Stability Analysis:** Introduced checkHeaderSetStability to the BehaviorAnalyzer. This new detection mechanism identifies "lazy" bots that rotate request fingerprints (header sets) during a session, significantly improving bot detection precision without additional database overhead.
+
+- **New configuration parameter:** Added header_set_anomaly weight to the configuration file, allowing fine-grained control over the detection sensitivity.
+
+- **Extended Test Suite:** Added feature tests for HeaderSetStability to ensure reliable detection of fingerprint inconsistencies.
+
+### Changed
+Internal logic: Enhanced the behavioral analysis flow to catch sophisticated bot patterns that mimic legitimate browser behavior while failing to maintain a consistent fingerprint.
+
 ## [2.4.0] - 2026-05-25
 
 ### Breaking Changes
