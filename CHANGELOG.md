@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.1] — 2026-06-01
+### Fixed
+- **Behavior Analysis:** Fixed false-positive header_set_anomaly flags.
+
+- **Logic:** Improved checkHeaderSetStability to distinguish between "identity rotation" (bot behavior) and "natural session growth" (loading AJAX, cookies, or XHR).
+
+- **Stability:** The analyzer now allows header sets to expand over time without triggering a penalty. Penalties are now strictly applied only when core browser identifiers are lost or removed during a session.
+
+- **Testing:** Updated BehaviorAnalyzerTest to reflect real-world browser behavior (successful passing of sequential requests with extra headers).
+
 ## [2.5.0] - 2026-06-01
 ### Added
 - **Header Stability Analysis:** Introduced checkHeaderSetStability to the BehaviorAnalyzer. This new detection mechanism identifies "lazy" bots that rotate request fingerprints (header sets) during a session, significantly improving bot detection precision without additional database overhead.

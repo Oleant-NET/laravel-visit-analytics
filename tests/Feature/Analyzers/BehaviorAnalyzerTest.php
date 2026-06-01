@@ -187,22 +187,20 @@ test('it does not flag normal AJAX requests', function () {
         ->and($state->getReasons())->not->toContain('speed_anomaly');
 });
 
-test('it flags header set anomaly when fingerprint changes for same ip', function () {
+test('it flags header set anomaly when core headers are lost', function () {
     $ip = '7.7.7.7';
     
-    // Предыдущий визит с другим отпечатком
+    // Visit with full headers
     VisitLog::factory()->create([
         'ip_address' => $ip,
-        'fingerprint_hash' => 'hash_a',
-        'target_headers' => ['user-agent' => 'Browser A'],
+        'target_headers' => ['sec-ch-ua', 'sec-fetch-dest', 'accept-language'],
         'created_at' => now()->subMinutes(5)
     ]);
 
-    // Текущий визит с новым отпечатком
+    // Current visit has lost a core header
     $log = VisitLog::factory()->create([
         'ip_address' => $ip,
-        'fingerprint_hash' => 'hash_b',
-        'target_headers' => ['user-agent' => 'Browser B', 'cookie' => 'val=1'],
+        'target_headers' => ['sec-ch-ua', 'accept-language'], // 'sec-fetch-dest' is gone
         'created_at' => now()
     ]);
 
@@ -211,28 +209,28 @@ test('it flags header set anomaly when fingerprint changes for same ip', functio
 
     $params = getBaseParams();
     $params['weights']['header_set_anomaly'] = 30;
-    $params['header_stability_window'] = 30;
 
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getReasons())->toContain('header_set_anomaly')
         ->and($state->getScore())->toBe(30)
-        ->and($state->getEvidence()['header_set_anomaly']['curr_keys'])->toContain('cookie');
+        ->and($state->getEvidence()['header_set_anomaly']['lost_headers'])->toContain('sec-fetch-dest');
 });
 
-test('it does not flag header set anomaly when fingerprint remains stable', function () {
+test('it does not flag header set anomaly when headers are just added', function () {
     $ip = '8.8.8.8';
-    $hash = 'stable_hash';
 
+    // Initial visit
     VisitLog::factory()->create([
         'ip_address' => $ip,
-        'fingerprint_hash' => $hash,
+        'target_headers' => ['sec-ch-ua', 'accept-language'],
         'created_at' => now()->subMinutes(5)
     ]);
 
+    // Current visit adds extra headers (like cookies or x-requested-with)
     $log = VisitLog::factory()->create([
         'ip_address' => $ip,
-        'fingerprint_hash' => $hash,
+        'target_headers' => ['sec-ch-ua', 'accept-language', 'cookie', 'x-requested-with'],
         'created_at' => now()
     ]);
 
@@ -244,6 +242,7 @@ test('it does not flag header set anomaly when fingerprint remains stable', func
 
     $analyzer->analyze($log, $state, $params);
 
+    // Should NOT flag anomaly because nothing was lost
     expect($state->getReasons())->not->toContain('header_set_anomaly')
         ->and($state->getScore())->toBe(0);
 });

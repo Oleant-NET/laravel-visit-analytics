@@ -291,36 +291,46 @@ class BehaviorAnalyzer implements BotAnalyzerInterface
         }
     }
 
-    /**
-     * Detects changes to the fingerprint for a single IP address.
-     * Real browsers maintain a stable set of headers throughout a session.
+/**
+     * Detects browser identity changes by comparing header sets.
+     * Real browsers maintain or expand their header set (e.g., adding cookies/XHR).
+     * We flag anomalies only when core headers are lost during a session.
      */
-    protected function checkHeaderSetStability(VisitLog $log, AnalysisState $state, array $params):void 
+    protected function checkHeaderSetStability(VisitLog $log, AnalysisState $state, array $params): void 
     {
         $window = (int)($params['header_stability_window'] ?? 30); // Minutes
-
         $from = $this->ensureCarbon($log->created_at)->copy()->subMinutes($window);
 
-        $differentFingerprint = VisitLog::query()
+        // Fetch the most recent visit from the same IP within the stability window
+        $previousLog = VisitLog::query()
             ->where('ip_address', $log->ip_address)
             ->where('id', '<', $log->id)
             ->where('created_at', '>=', $from)
-            ->where('fingerprint_hash', '!=', $log->fingerprint_hash)
             ->orderByDesc('id')
             ->first();
 
-        if ($differentFingerprint) {
-            $weight = (int)($params['weights']['header_set_anomaly'] ?? 30);
+        if ($previousLog) {
+            $prevKeys = is_array($previousLog->target_headers) ? $previousLog->target_headers : [];
+            $currKeys = is_array($log->target_headers) ? $log->target_headers : [];
 
-            $state->add(
-                $weight,
-                'header_set_anomaly',
-                [
-                    'time_diff'     => $differentFingerprint->created_at->diffForHumans($log->created_at),
-                    'prev_keys'     => is_array($differentFingerprint->target_headers) ? array_keys($differentFingerprint->target_headers) : [],
-                    'curr_keys'     => is_array($log->target_headers) ? array_keys($log->target_headers) : [],
-                ]
-            );
+            // Detect headers present in the previous request but missing in the current one.
+            // This indicates a likely identity shift (bot rotation).
+            $lostHeaders = array_diff($prevKeys, $currKeys);
+
+            if (!empty($lostHeaders)) {
+                $weight = (int)($params['weights']['header_set_anomaly'] ?? 30);
+
+                $state->add(
+                    $weight,
+                    'header_set_anomaly',
+                    [
+                        'time_diff'    => $previousLog->created_at->diffForHumans($log->created_at),
+                        'lost_headers' => array_values($lostHeaders),
+                        'prev_keys'    => $prevKeys,
+                        'curr_keys'    => $currKeys,
+                    ]
+                );
+            }
         }
     }
 
