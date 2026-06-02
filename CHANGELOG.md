@@ -2,15 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.5.1] — 2026-06-01
+## [2.5.1] — 2026-06-02
 ### Fixed
 - **Behavior Analysis:** Fixed false-positive header_set_anomaly flags.
 
-- **Logic:** Improved checkHeaderSetStability to distinguish between "identity rotation" (bot behavior) and "natural session growth" (loading AJAX, cookies, or XHR).
+- **Logic:** Improved checkHeaderSetStability to distinguish between "identity rotation" (bot behavior) and "natural session growth" (loading `AJAX`, `cookies`, or `XHR`).
 
 - **Stability:** The analyzer now allows header sets to expand over time without triggering a penalty. Penalties are now strictly applied only when core browser identifiers are lost or removed during a session.
 
 - **Testing:** Updated BehaviorAnalyzerTest to reflect real-world browser behavior (successful passing of sequential requests with extra headers).
+
+### Added
+- **Configuration:** Introduced dynamic_headers parameter in `config/visit-analytics.php` to define transient HTTP headers that fluctuate based on request context (e.g., `sec-fetch-dest`, `x-requested-with`). This allows for granular control over which headers should be ignored during stability checks.
 
 ## [2.5.0] - 2026-06-01
 ### Added

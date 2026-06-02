@@ -291,17 +291,17 @@ class BehaviorAnalyzer implements BotAnalyzerInterface
         }
     }
 
-/**
-     * Detects browser identity changes by comparing header sets.
-     * Real browsers maintain or expand their header set (e.g., adding cookies/XHR).
-     * We flag anomalies only when core headers are lost during a session.
+    /**
+     * Detects changes to the browser identity by comparing the keys of the header sets.
+     * We ignore changes in header values (e.g., 'document' vs 'empty') as they 
+     * are expected during navigation or AJAX requests.
+     * * Only the removal of existing header keys triggers an anomaly.
      */
     protected function checkHeaderSetStability(VisitLog $log, AnalysisState $state, array $params): void 
     {
-        $window = (int)($params['header_stability_window'] ?? 30); // Minutes
+        $window = (int)($params['header_stability_window'] ?? 30);
         $from = $this->ensureCarbon($log->created_at)->copy()->subMinutes($window);
 
-        // Fetch the most recent visit from the same IP within the stability window
         $previousLog = VisitLog::query()
             ->where('ip_address', $log->ip_address)
             ->where('id', '<', $log->id)
@@ -310,26 +310,23 @@ class BehaviorAnalyzer implements BotAnalyzerInterface
             ->first();
 
         if ($previousLog) {
-            $prevKeys = is_array($previousLog->target_headers) ? $previousLog->target_headers : [];
-            $currKeys = is_array($log->target_headers) ? $log->target_headers : [];
+            $prevKeys = array_keys((array) $previousLog->target_headers);
+            $currKeys = array_keys((array) $log->target_headers);
 
-            // Detect headers present in the previous request but missing in the current one.
-            // This indicates a likely identity shift (bot rotation).
+            // Fetch ignored headers from config
+            $ignored = $params['exclude_dynamic_headers'] ?? [];
+            
+            // Find actual loss, ignoring the dynamic ones
             $lostHeaders = array_diff($prevKeys, $currKeys);
+            $actualLoss = array_diff($lostHeaders, $ignored);
 
-            if (!empty($lostHeaders)) {
+            if (!empty($actualLoss)) {
                 $weight = (int)($params['weights']['header_set_anomaly'] ?? 30);
-
-                $state->add(
-                    $weight,
-                    'header_set_anomaly',
-                    [
-                        'time_diff'    => $previousLog->created_at->diffForHumans($log->created_at),
-                        'lost_headers' => array_values($lostHeaders),
-                        'prev_keys'    => $prevKeys,
-                        'curr_keys'    => $currKeys,
-                    ]
-                );
+                
+                $state->add($weight, 'header_set_anomaly', [
+                    'time_diff'    => $previousLog->created_at->diffForHumans($log->created_at),
+                    'lost_headers' => array_values($actualLoss),
+                ]);
             }
         }
     }

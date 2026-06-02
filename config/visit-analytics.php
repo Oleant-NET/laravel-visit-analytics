@@ -731,9 +731,28 @@ return [
                      */
                     'time_window'               => 5,  // Minutes
                     'rate_limit_per_minute'     => 60, // Max allowed requests per minute
-                    'ua_stability_window'       => 30, // Minutes
-                    'header_stability_window'   => 30, // Minutes
 
+                    /**
+                     * @var int Time window in minutes to verify User-Agent consistency.
+                     */
+                    'ua_stability_window' => 30,
+
+                    /**
+                     * @var int Time window in minutes to verify HTTP header set consistency.
+                     */
+                    'header_stability_window' => 30,
+
+                    /**
+                     * @var string[] List of headers that are expected to fluctuate based on request type
+                     * (e.g., transitions between Navigation, AJAX/XHR, and CORS requests).
+                     * These headers are excluded from stability checks to prevent false-positive anomalies.
+                     */
+                    'exclude_dynamic_headers' => [
+                        'sec-fetch-dest',
+                        'sec-fetch-mode',
+                        'sec-fetch-site',
+                        'x-requested-with',
+                    ],
 
                     /**
                      * Speed & Navigation Flow

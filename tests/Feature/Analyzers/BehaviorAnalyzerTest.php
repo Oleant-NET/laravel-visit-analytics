@@ -190,47 +190,62 @@ test('it does not flag normal AJAX requests', function () {
 test('it flags header set anomaly when core headers are lost', function () {
     $ip = '7.7.7.7';
     
-    // Visit with full headers
+    // Get base params and override specific configuration for the test
+    $params = getBaseParams();
+    $params['weights']['header_set_anomaly'] = 30;
+    
+    // Fetch dynamic header exclusion list from the config
+    $params['exclude_dynamic_headers'] = config('visit-analytics.exclude_dynamic_headers', [
+        'sec-fetch-dest',
+        'sec-fetch-mode',
+        'sec-fetch-site',
+        'x-requested-with'
+    ]);
+
+    // Initial visit with a full set of headers
     VisitLog::factory()->create([
         'ip_address' => $ip,
-        'target_headers' => ['sec-ch-ua', 'sec-fetch-dest', 'accept-language'],
+        'target_headers' => ['sec-ch-ua' => 'v1', 'accept-language' => 'ru'],
         'created_at' => now()->subMinutes(5)
     ]);
 
-    // Current visit has lost a core header
+    // Subsequent visit where a core header ('accept-language') is missing
     $log = VisitLog::factory()->create([
         'ip_address' => $ip,
-        'target_headers' => ['sec-ch-ua', 'accept-language'], // 'sec-fetch-dest' is gone
+        'target_headers' => ['sec-ch-ua' => 'v1'], 
         'created_at' => now()
     ]);
 
     $state = new AnalysisState();
     $analyzer = new BehaviorAnalyzer();
 
-    $params = getBaseParams();
-    $params['weights']['header_set_anomaly'] = 30;
-
     $analyzer->analyze($log, $state, $params);
 
+    // Verify that the anomaly is flagged and the score is applied correctly
     expect($state->getReasons())->toContain('header_set_anomaly')
         ->and($state->getScore())->toBe(30)
-        ->and($state->getEvidence()['header_set_anomaly']['lost_headers'])->toContain('sec-fetch-dest');
+        ->and($state->getEvidence()['header_set_anomaly']['lost_headers'])->toContain('accept-language');
 });
 
 test('it does not flag header set anomaly when headers are just added', function () {
     $ip = '8.8.8.8';
 
-    // Initial visit
+    // Pass arrays directly to avoid double-encoding issues with Eloquent casts
     VisitLog::factory()->create([
         'ip_address' => $ip,
-        'target_headers' => ['sec-ch-ua', 'accept-language'],
+        'target_headers' => ['sec-ch-ua' => 'v1', 'accept-language' => 'ru'],
         'created_at' => now()->subMinutes(5)
     ]);
 
-    // Current visit adds extra headers (like cookies or x-requested-with)
+    // Adding headers is not an anomaly, as no keys were removed
     $log = VisitLog::factory()->create([
         'ip_address' => $ip,
-        'target_headers' => ['sec-ch-ua', 'accept-language', 'cookie', 'x-requested-with'],
+        'target_headers' => [
+            'sec-ch-ua' => 'v1', 
+            'accept-language' => 'ru', 
+            'cookie' => 'val', 
+            'x-requested-with' => 'xml'
+        ],
         'created_at' => now()
     ]);
 
@@ -239,10 +254,14 @@ test('it does not flag header set anomaly when headers are just added', function
 
     $params = getBaseParams();
     $params['weights']['header_set_anomaly'] = 30;
+    // Ensure we use the dynamic headers exclusion logic
+    $params['exclude_dynamic_headers'] = config('visit-analytics.exclude_dynamic_headers', [
+        'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'x-requested-with'
+    ]);
 
     $analyzer->analyze($log, $state, $params);
 
-    // Should NOT flag anomaly because nothing was lost
+    // Assert that no anomaly was triggered
     expect($state->getReasons())->not->toContain('header_set_anomaly')
         ->and($state->getScore())->toBe(0);
 });
