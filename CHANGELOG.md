@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.2] — 2026-06-07
+### Fixed
+- **Model Integrity:** Implemented `setUrlAttribute` mutator in `VisitLog` model to prevent `SQLSTATE[22001]: String data, right truncated` errors caused by excessively long URLs from malicious bot scans.
+- **Data Safety:** Added unit tests to ensure URL truncation logic correctly handles strings exceeding 255 characters.
+
 ## [2.5.1] — 2026-06-02
 ### Fixed
 - **Behavior Analysis:** Fixed false-positive header_set_anomaly flags.

@@ -5,6 +5,7 @@ namespace Oleant\VisitAnalytics\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Oleant\VisitAnalytics\Database\Factories\VisitLogFactory;
+use Illuminate\Support\Str;
 
 /**
  * @property string $ip_address
@@ -77,5 +78,16 @@ class VisitLog extends Model
     protected static function newFactory()
     {
         return VisitLogFactory::new();
+    }
+
+    /**
+     * Set the url attribute.
+     *
+     * @param string|null $value
+     * @return void
+     */
+    public function setUrlAttribute(?string $value): void
+    {
+        $this->attributes['url'] = Str::limit($value, 255, '');
     }
 }
