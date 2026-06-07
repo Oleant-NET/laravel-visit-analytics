@@ -29,7 +29,7 @@ class HeaderIntegrityAnalyzer implements BotAnalyzerInterface
     {
         /** @var array $headers */
         $headers = $log->target_headers ?? [];
-        $userAgent = $log->user_agent;
+        $userAgent = (string) $log->user_agent;
 
         // 1. Check if the overall header diversity is too low
         $this->evaluateHeaderDiversity($headers, $state, $params['min_total_headers'] ?? []);

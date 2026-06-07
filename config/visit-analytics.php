@@ -691,7 +691,7 @@ return [
                         'enabled' => true,
                         'no_referer_window_minutes' => 10,
                         'no_referer_increment'      => 20, // Extra points per repeated hit
-                        'session_window' => fn() => config('visit-analytics.retro_analysis.session_window', 60),
+                        'session_window' => config('visit-analytics.retro_analysis.session_window', 60),
                     ],
 
                     'weights' => [
@@ -887,7 +887,7 @@ return [
                      * List of official bots/crawlers (IP ranges or UA patterns)
                      * that are exempted from the cluster detection logic.
                      */
-                    'whitelist_patterns' => fn() => config('visit-analytics.detection_engine.analyzers.explicit_bots.params.explicit_bots', []),
+                    'whitelist_patterns' => config('visit-analytics.detection_engine.analyzers.explicit_bots.params.explicit_bots', []),
 
                     'weights' => [
                         /**
