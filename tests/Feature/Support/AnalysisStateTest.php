@@ -87,3 +87,23 @@ it('tracks public flags and counters', function () {
     expect($state->isOfficialBot)->toBeTrue()
         ->and($state->newLookups)->toBe(5);
 });
+
+/**
+ * @test
+ * Verifies that getEvidenceValue returns the correct data or a default value.
+ */
+it('retrieves specific evidence values or returns default', function () {
+    $state = new AnalysisState();
+    
+    // Add some evidence
+    $state->addEvidence('resolved_hostname', 'example.com');
+    
+    // Test retrieval of existing key
+    expect($state->getEvidenceValue('resolved_hostname'))->toBe('example.com');
+    
+    // Test retrieval of non-existent key with default
+    expect($state->getEvidenceValue('non_existent', 'default_value'))->toBe('default_value');
+    
+    // Test retrieval of non-existent key without default (should be null)
+    expect($state->getEvidenceValue('unknown'))->toBeNull();
+});

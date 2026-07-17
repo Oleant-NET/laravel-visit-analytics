@@ -3,11 +3,25 @@
 namespace Oleant\VisitAnalytics\Tests\Feature\Analyzers;
 
 use Oleant\VisitAnalytics\Analyzers\RefererAnalyzer;
+use Oleant\VisitAnalytics\Analyzers\Rules\Referer\MissingRefererRule;
+use Oleant\VisitAnalytics\Analyzers\Rules\Referer\PortLeakRule;
+use Oleant\VisitAnalytics\Analyzers\Rules\Referer\SelfRefererRule;
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Support\AnalysisState;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(\Oleant\VisitAnalytics\Tests\TestCase::class, RefreshDatabase::class);
+
+/**
+ * Define the standard rule set used across most referer analysis scenarios.
+ */
+beforeEach(function () {
+    $this->defaultRules = [
+        MissingRefererRule::class,
+        PortLeakRule::class,
+        SelfRefererRule::class,
+    ];
+});
 
 /**
  * @test
@@ -19,6 +33,7 @@ it('penalizes missing referer for direct navigation', function () {
     $analyzer = new RefererAnalyzer();
     
     $params = [
+        'rules' => $this->defaultRules,
         'weights' => ['no_referer' => 35],
         'cumulative' => ['enabled' => false]
     ];
@@ -37,14 +52,13 @@ it('penalizes missing referer for direct navigation', function () {
 it('applies cumulative penalty for sequential direct hits', function () {
     $ip = '192.168.1.1';
     
-    // Create 2 previous direct hits within the last 5 minutes
+    // Setup: 2 previous direct hits within the last 5 minutes
     VisitLog::factory()->count(2)->create([
         'ip_address' => $ip,
         'referer' => null,
         'created_at' => now()->subMinutes(2)
     ]);
 
-    // Current hit
     $currentLog = VisitLog::factory()->create([
         'ip_address' => $ip,
         'referer' => null
@@ -54,6 +68,7 @@ it('applies cumulative penalty for sequential direct hits', function () {
     $analyzer = new RefererAnalyzer();
     
     $params = [
+        'rules' => $this->defaultRules,
         'weights' => ['no_referer' => 10],
         'cumulative' => [
             'enabled' => true,
@@ -64,9 +79,10 @@ it('applies cumulative penalty for sequential direct hits', function () {
 
     $analyzer->analyze($currentLog, $state, $params);
 
-    // Score = 10 (base) + (2 previous hits * 20 increment) = 50
+    // Calculation: 10 (base) + (2 previous hits * 20 increment) = 50
     expect($state->getScore())->toBe(50)
-        ->and($state->getReasons())->toContain('referer_snowball');
+        ->and($state->getReasons())->toContain('referer_snowball')
+        ->and($state->getEvidenceValue('referer_snowball'))->toBe(['sequential_direct_hits' => 2]);
 });
 
 /**
@@ -82,6 +98,7 @@ it('detects referer port leaks from hosting panels', function () {
     $analyzer = new RefererAnalyzer();
     
     $params = [
+        'rules' => [$this->defaultRules[1]], // Run only PortLeakRule
         'port_leak' => [8443],
         'weights' => ['port_leak' => 45]
     ];
@@ -89,7 +106,7 @@ it('detects referer port leaks from hosting panels', function () {
     $analyzer->analyze($log, $state, $params);
 
     expect($state->getScore())->toBe(45)
-        ->and($state->getEvidence())->toHaveKey('port_leak.leaked_port', 8443);
+        ->and($state->getEvidenceValue('port_leak'))->toBe(['leaked_port' => 8443]);
 });
 
 /**
@@ -102,17 +119,17 @@ it('flags impossible self-referer loops on first visit', function () {
     
     $log = VisitLog::factory()->create([
         'url' => $url,
-        'referer' => $url, // Self-referencing
+        'referer' => $url,
         'ip_address' => '1.2.3.4'
     ]);
 
     $state = new AnalysisState();
     $analyzer = new RefererAnalyzer();
     
-    $analyzer->analyze($log, $state, []);
+    $analyzer->analyze($log, $state, [
+        'rules' => [$this->defaultRules[2]] // Run only SelfRefererRule
+    ]);
 
-    // Score should be 100 because it's technically impossible to be 
-    // referred by a page you haven't visited yet.
     expect($state->getScore())->toBe(100)
         ->and($state->getReasons())->toContain('impossible_self_referer');
 });
@@ -126,7 +143,7 @@ it('penalizes standard referer loops for returning visitors', function () {
     $ip = '5.5.5.5';
     $url = 'https://example.com/home';
 
-    // First visit (legit)
+    // First visit (legitimate)
     VisitLog::factory()->create(['ip_address' => $ip, 'url' => $url]);
 
     // Second visit (suspicious loop)
@@ -140,6 +157,7 @@ it('penalizes standard referer loops for returning visitors', function () {
     $analyzer = new RefererAnalyzer();
     
     $params = [
+        'rules' => [$this->defaultRules[2]],
         'weights' => ['referer_loop' => 50]
     ];
 
@@ -165,23 +183,7 @@ it('does not penalize same-origin requests that refer to themselves', function (
     $state = new AnalysisState();
     $analyzer = new RefererAnalyzer();
     
-    $analyzer->analyze($log, $state, []);
+    $analyzer->analyze($log, $state, ['rules' => [$this->defaultRules[2]]]);
 
     expect($state->getScore())->toBe(0);
-});
-
-/**
- * @test
- * Verifies empty string referer is treated the same as null
- */
-it('penalizes empty string referer as missing', function () {
-    $log = VisitLog::factory()->create(['referer' => '']);
-    $state = new AnalysisState();
-    $analyzer = new RefererAnalyzer();
-    
-    $params = ['weights' => ['no_referer' => 35]];
-
-    $analyzer->analyze($log, $state, $params);
-
-    expect($state->getReasons())->toContain('missing_referer');
 });

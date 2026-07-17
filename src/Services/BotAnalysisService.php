@@ -43,7 +43,9 @@ class BotAnalysisService
                 $analyzer = app($settings['class']);
                 
                 // Pass only the 'params' sub-array to ensure encapsulation
-                $analyzer->analyze($log, $state, $settings['params'] ?? []);
+                $analyzer->analyze($log, $state, array_merge((array)($settings['params'] ?? []), [
+                    'threshold' => $threshold
+                ]));
 
             } catch (Throwable $e) {
                 // Report the error to the logs/Sentry without breaking the loop

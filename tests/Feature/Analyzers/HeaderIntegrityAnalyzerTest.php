@@ -23,6 +23,12 @@ it('flags requests with very few headers', function () {
     $analyzer = new HeaderIntegrityAnalyzer();
     
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'enabled' => true,
         'min_total_headers' => ['count' => 5, 'score' => 40],
         'weights' => [] // Отключаем проверку весов
@@ -53,6 +59,12 @@ it('penalizes missing mandatory headers', function () {
     $analyzer = new HeaderIntegrityAnalyzer();
     
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'enabled' => true,
         'min_total_headers' => ['count' => 1], // Занижаем лимит, чтобы не мешал
         'weights' => [
@@ -74,6 +86,12 @@ it('requires client hints only for chrome-based browsers', function () {
     $analyzer = new HeaderIntegrityAnalyzer();
     
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'enabled' => true,
         'min_total_headers' => ['count' => 1], // Снижаем, чтобы Firefox не падал по количеству
         'weights' => ['sec-ch-ua' => 50]
@@ -111,6 +129,12 @@ it('adds evidence when cookie header is missing and tracked', function () {
     $analyzer = new HeaderIntegrityAnalyzer();
     
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'enabled' => true,
         'min_total_headers' => ['count' => 1],
         'target_headers' => ['cookie']
@@ -134,6 +158,12 @@ it('flags over-engineered bots sending high-entropy headers on cold start', func
     ]);
 
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'min_total_headers' => ['count' => 1],
         'target_headers' => ['cookie'],
         'consistency_checks' => [
@@ -163,6 +193,12 @@ it('flags platform mismatch between UA and client hints', function () {
     ]);
 
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'min_total_headers' => ['enabled' => false, 'count' => 0], 
         'consistency_checks' => [
             'os_platform_mismatch' => ['enabled' => true, 'score' => 50]
@@ -191,6 +227,12 @@ it('flags mobile desktop conflict', function () {
     ]);
 
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'min_total_headers' => ['count' => 0],
         'consistency_checks' => [
             'os_platform_mismatch' => ['enabled' => true, 'score' => 50]
@@ -216,6 +258,12 @@ it('flags unsolicited architecture header on cold start', function () {
     ]);
 
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'min_total_headers' => ['count' => 0],
         'consistency_checks' => [
             'arch_architecture_mismatch' => ['enabled' => true, 'score' => 20]
@@ -241,6 +289,12 @@ it('flags architecture conflict', function () {
     ]);
 
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class,
+            \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+        ],
         'min_total_headers' => ['count' => 0],
         'consistency_checks' => [
             'arch_architecture_mismatch' => ['enabled' => true, 'score' => 45]

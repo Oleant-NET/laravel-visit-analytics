@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0] — 2026-07-17
+### Added
+- **Behavioral Analysis:** Implemented `suspicious_entry` detection in `BehaviorAnalyzer`. The system now identifies and flags (with a configurable weight) bots that initiate sessions on internal pages by spoofing an internal referer without having a corresponding entry point in the session history.
+
+- **Configurability:** Added `suspicious_entry weight` to the configuration file, allowing users to define the severity (`default: 100`) for bots attempting to simulate navigation paths
+
 ## [2.5.2] — 2026-06-07
 ### Fixed
 - **Model Integrity:** Implemented `setUrlAttribute` mutator in `VisitLog` model to prevent `SQLSTATE[22001]: String data, right truncated` errors caused by excessively long URLs from malicious bot scans.

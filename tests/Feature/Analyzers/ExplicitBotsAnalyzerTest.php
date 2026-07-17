@@ -22,6 +22,7 @@ it('identifies bots based on user agent signatures', function () {
     $analyzer = new ExplicitBotsAnalyzer();
     
     $params = [
+        'rules' => [\Oleant\VisitAnalytics\Analyzers\Rules\ExplicitBots\ExplicitBotsRule::class],
         'explicit_bots' => ['googlebot', 'bingbot'],
         'weights' => ['ua_explicit' => 100]
     ];
@@ -47,6 +48,7 @@ it('is case insensitive when matching signatures', function () {
     $analyzer = new ExplicitBotsAnalyzer();
     
     $params = [
+        'rules' => [\Oleant\VisitAnalytics\Analyzers\Rules\ExplicitBots\ExplicitBotsRule::class],
         'explicit_bots' => ['crawler-x'],
     ];
 

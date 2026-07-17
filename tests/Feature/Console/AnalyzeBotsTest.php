@@ -71,24 +71,49 @@ it('respects the max limit option', function () {
 /**
  * @test
  * Confirms that the command triggers the underlying analysis logic.
- * It uses a known honeypot path to ensure the 'is_bot' status is correctly updated.
  */
 it('updates bot status after command execution', function () {
-    // Create a visit to a sensitive path that should trigger bot detection
+    // 1. Create a mock analyzer that forces a "bot" verdict
+    $mockAnalyzer = Mockery::mock(\Oleant\VisitAnalytics\Contracts\BotAnalyzerInterface::class);
+    $mockAnalyzer->shouldReceive('analyze')
+        ->once()
+        ->andReturnUsing(function ($log, $state) {
+            $state->score = 100; // Force bot status
+            $state->reasons[] = 'Honeypot hit';
+        });
+
+    // 2. Register mock in the container
+    app()->instance('ForcedBotAnalyzer', $mockAnalyzer);
+
+    // 3. Configure the command to use this mock
+    config(['visit-analytics.detection_engine' => [
+        'threshold' => 70,
+        'analyzers' => [
+            [
+                'class' => 'ForcedBotAnalyzer',
+                'enabled' => true,
+                'params' => []
+            ]
+        ]
+    ]]);
+
+    // 4. Create the log entry
     $log = VisitLog::create([
         'ip_address' => '3.3.3.3',
         'user_agent' => 'EvilBot',
-        'url' => '/.env', 
+        'url' => '/.env',
         'processed_at' => null
     ]);
 
+    // 5. Execute command
     $this->artisan('visit-analytics:analyze-bots');
 
+    // 6. Assertions
     $log->refresh();
     
-    // Assert that the visit was processed and correctly flagged as a bot
     expect($log->processed_at)->not->toBeNull()
-        ->and($log->is_bot)->toBeTrue();
+        ->and($log->is_bot)->toBeTrue()
+        ->and($log->bot_reasons)->toContain('Honeypot hit');
 });
 
 /**

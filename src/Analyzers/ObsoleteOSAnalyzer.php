@@ -2,6 +2,7 @@
 
 namespace Oleant\VisitAnalytics\Analyzers;
 
+use Oleant\VisitAnalytics\Analyzers\Base\AbstractAnalyzer;
 use Oleant\VisitAnalytics\Contracts\BotAnalyzerInterface;
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Support\AnalysisState;
@@ -14,10 +15,13 @@ use Oleant\VisitAnalytics\Support\AnalysisState;
  * botnets often rely on outdated User-Agent strings, making this a 
  * reliable heuristic for suspicion.
  */
-class ObsoleteOSAnalyzer implements BotAnalyzerInterface
+class ObsoleteOSAnalyzer extends AbstractAnalyzer implements BotAnalyzerInterface
 {
     /**
-     * Analyzes the User-Agent for obsolete Operating System signatures.
+     * Analyzes the User-Agent for obsolete Operating System or Browser signatures.
+     * 
+     * The analysis is delegated to rules defined in the configuration. 
+     * If the User-Agent is empty, the analysis is skipped.
      *
      * @param VisitLog $log The current visit log model.
      * @param AnalysisState $state The state object for accumulating results.
@@ -26,58 +30,14 @@ class ObsoleteOSAnalyzer implements BotAnalyzerInterface
      */
     public function analyze(VisitLog $log, AnalysisState $state, array $params = []): void
     {
-        $ua = (string)$log->user_agent;
-
-        /** 
-         * Default patterns for obsolete systems.
-         * Windows NT 5.x covers XP and Server 2003.
-         * Windows NT 6.0-6.3 covers Vista, 7, 8, and 8.1.
-         */
-        $obsoleteOSPatterns = $params['target_os'] ?? [];
-
-        /** 
-         * Default patterns for obsolete systems.
-         * Windows NT 5.x covers XP and Server 2003.
-         * Windows NT 6.0-6.3 covers Vista, 7, 8, and 8.1.
-         */
-        $obsoleteBrowserPatterns = $params['target_browsers'] ?? [];
-
-        $is_obsolete_os = false;
-
-        foreach ($obsoleteOSPatterns as $pattern) {
-            if (stripos($ua, $pattern) !== false) {
-                $points = (int)($params['weights']['obsolete_os'] ?? 35);
-
-                /**
-                 * Add score and reason. 
-                 * We record the specific pattern found as technical evidence.
-                 */
-                $state->add($points, 'obsolete_os', [
-                    'os_signature' => $pattern
-                ]);
-
-                $is_obsolete_os = true;
-
-                break;
-            }
-        }        
-        
-        if ($is_obsolete_os) {
-            foreach ($obsoleteBrowserPatterns as $pattern) {
-                if (stripos($ua, $pattern) !== false) {
-                    $points = (int)($params['weights']['obsolete_browsers'] ?? 35);
-
-                    /**
-                     * Add score and reason. 
-                     * We record the specific pattern found as technical evidence.
-                     */
-                    $state->add($points, 'obsolete_browsers', [
-                        'browsers_signature' => $pattern
-                    ]);
-
-                    break;
-                }
-            }
+        if (empty($log->user_agent)) {
+            return;
         }
+
+        /**
+         * The executeRules() method is inherited from AbstractAnalyzer.
+         * It iterates through the 'rules' provided in $params and applies them.
+         */
+        $this->executeRules($log, $state, $params);
     }
 }

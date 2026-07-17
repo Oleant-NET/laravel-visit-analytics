@@ -309,6 +309,13 @@ return [
             'explicit_bots' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\ExplicitBotsAnalyzer::class,
+                /**
+                 * Define active rules here. You can easily enable/disable or
+                 * reorder them without changing the core logic.
+                 */
+                'rules' => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\ExplicitBots\ExplicitBotsRule::class,
+                ],
                 'params'  => [
                     
                     /**
@@ -354,6 +361,16 @@ return [
             'header_integrity' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\HeaderIntegrityAnalyzer::class,
+                /**
+                 * Define active rules here. You can easily enable/disable or
+                 * reorder them without changing the core logic.
+                 */
+                'rules' => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderDiversityRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderWeightsRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderCookieRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\HeaderIntegrity\HeaderConsistencyRule::class
+                ],
                 'params'  => [
                     /**
                      * Minimum Header Count Check
@@ -506,6 +523,10 @@ return [
             'obsolete_os' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\ObsoleteOSAnalyzer::class,
+                'rules'   => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\ObsoleteOS\ObsoleteOSRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\ObsoleteOS\ObsoleteBrowserRule::class,
+                ],
                 'params'  => [
                     
                     /**
@@ -577,6 +598,9 @@ return [
                 /** @var bool Enable or disable the \Oleant\VisitAnalytics\Analyzers\OutdatedBrowserAnalyzer */
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\OutdatedBrowserAnalyzer::class,
+                'rules'   => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\OutdatedBrowser\OutdatedBrowserRule::class,
+                ],
                 'params'  => [
                     /** 
                      * Reference versions for May 2026.
@@ -627,6 +651,13 @@ return [
             'honeypots' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\HoneypotAnalyzer::class,
+                /**
+                 * Define active rules here. You can easily enable/disable or
+                 * reorder them without changing the core logic.
+                 */
+                'rules' => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Honeypot\HoneypotRule::class,
+                ],                
                 'params'  => [
 
                     /**
@@ -666,6 +697,11 @@ return [
             'referer' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\RefererAnalyzer::class,
+                'rules'   => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Referer\MissingRefererRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Referer\PortLeakRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Referer\SelfRefererRule::class,
+                ],
                 'params'  => [
 
                     /**
@@ -723,6 +759,20 @@ return [
             'behavioral' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\BehaviorAnalyzer::class,
+                /**
+                 * Define active rules here. You can easily enable/disable or
+                 * reorder them without changing the core logic.
+                 */
+                'rules' => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\VisitDepthRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\RateLimitRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\SuspiciousEntryRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\SpeedAnomalyRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\RefererChainRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\RefererLoopRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\UserAgentStabilityRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Behavioral\HeaderSetStabilityRule::class,
+                ],
                 'params'  => [
 
                     /**
@@ -768,6 +818,13 @@ return [
                     'depth_check_window' => 60, // Minutes to look forward/backward
 
                     /**
+                     * Referer Loop Detection
+                     * Number of times a user must reference the current URL as its own referer 
+                     * within the defined timeframe before triggering an anomaly.
+                     */
+                    'referer_loop_threshold' => 3,
+
+                    /**
                      * Cumulative Scoring logic
                      * Used when the bot breaks the referer chain but continues to browse.
                      */
@@ -776,9 +833,11 @@ return [
                     ],
 
                     'weights' => [
+                        'suspicious_entry'  => 100, // Score for suspicious Entry
                         'single_visit'      => 15, // Score for "hit and run" behavior
                         'rate'              => 30, // Score for exceeding rate limit
                         'speed_anomaly'     => 20, // Score for inhumanly fast clicks
+                        'referer_loop'      => 10,  // Score for self-referencing loops
                         'ua_change_anomaly' => 40, // Score for change UA 
                         'header_set_anomaly'=> 30, // Score for change Headers Set
                     ],
@@ -794,6 +853,14 @@ return [
             'network' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\NetworkAnalyzer::class,
+                /**
+                 * Define active rules here. You can easily enable/disable or
+                 * reorder them without changing the core logic.
+                 */
+                'rules' => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Network\NetworkPtrRule::class,
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Network\NetworkDatacenterRule::class,
+                ],
                 'params'  => [
 
                     /**
@@ -836,6 +903,9 @@ return [
             'reputation' => [
                 'enabled' => true,
                 'class'   => \Oleant\VisitAnalytics\Analyzers\ReputationAnalyzer::class,
+                'rules'   => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Reputation\RepeatOffenderRule::class,
+                ],
                 'params'  => [
 
                     /**
@@ -857,7 +927,14 @@ return [
              */
             'botnet' => [
                 'enabled' => true,
-                'class'   => \Oleant\VisitAnalytics\Analyzers\BotnetAnalyzer::class, // Переименованный класс
+                'class'   => \Oleant\VisitAnalytics\Analyzers\BotnetAnalyzer::class,
+                /**
+                 * Define active rules here. You can easily enable/disable or
+                 * reorder them without changing the core logic.
+                 */
+                'rules' => [
+                    \Oleant\VisitAnalytics\Analyzers\Rules\Botnet\BotnetRule::class,
+                ],
                 'params'  => [
                     
                     // --- Cluster Identification Thresholds ---

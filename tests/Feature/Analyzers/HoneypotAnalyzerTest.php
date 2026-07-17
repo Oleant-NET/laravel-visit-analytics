@@ -22,6 +22,9 @@ it('flags visits to defined honeypot paths', function () {
     $analyzer = new HoneypotAnalyzer();
     
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\Honeypot\HoneypotRule::class,
+        ],
         'honeypot_paths' => ['.env', 'wp-admin', 'config.php'],
         'weights' => ['honeypot' => 100]
     ];
@@ -48,6 +51,9 @@ it('detects honeypot paths as fragments within the URL', function () {
     $analyzer = new HoneypotAnalyzer();
     
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\Honeypot\HoneypotRule::class,
+        ],
         'honeypot_paths' => ['config.php'],
     ];
 
@@ -69,6 +75,9 @@ it('does not flag legitimate paths', function () {
     $analyzer = new HoneypotAnalyzer();
     
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\Honeypot\HoneypotRule::class,
+        ],
         'honeypot_paths' => ['.env', 'wp-login'],
     ];
 
@@ -107,6 +116,9 @@ it('stops analysis after the first matched trap', function () {
     
     // The URL contains both 'admin' and 'db.sql'
     $params = [
+        'rules' => [
+            \Oleant\VisitAnalytics\Analyzers\Rules\Honeypot\HoneypotRule::class,
+        ],
         'honeypot_paths' => ['admin', 'db.sql'],
         'weights' => ['honeypot' => 100]
     ];

@@ -2,6 +2,7 @@
 
 namespace Oleant\VisitAnalytics\Analyzers;
 
+use Oleant\VisitAnalytics\Analyzers\Base\AbstractAnalyzer;
 use Oleant\VisitAnalytics\Contracts\BotAnalyzerInterface;
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Support\AnalysisState;
@@ -16,7 +17,7 @@ use Oleant\VisitAnalytics\Support\AnalysisState;
  * Since this is a "low-cost" string operation, it should typically be placed 
  * at the beginning of the analysis chain.
  */
-class ExplicitBotsAnalyzer implements BotAnalyzerInterface
+class ExplicitBotsAnalyzer extends AbstractAnalyzer implements BotAnalyzerInterface
 {
     /**
      * Analyze the User-Agent for explicit bot signatures.
@@ -31,39 +32,7 @@ class ExplicitBotsAnalyzer implements BotAnalyzerInterface
      */
     public function analyze(VisitLog $log, AnalysisState $state, array $params = []): void
     {
-        $ua = $log->user_agent;
-
-        // Skip analysis if User-Agent is not present
-        if (empty($ua)) {
-            return;
-        }
-
-        /** @var array $botSignatures List of substrings to identify bots */
-        $botSignatures = $params['explicit_bots'] ?? [];
-
-        foreach ($botSignatures as $botSign) {
-            // Ensure the signature is not an empty string before matching
-            if (!empty($botSign) && stripos($ua, $botSign) !== false) {
-                
-                // Retrieve penalty weight from configuration
-                $points = (int)($params['weights']['ua_explicit'] ?? 100);
-                
-                $state->add($points, 'explicit_bot', [
-                    'bot_signature' => $botSign
-                ]);
-
-                $state->addEvidence('bot_identity', $botSign);
-
-                /**
-                 * Flag as an official bot.
-                 * This helps distinguish between 'malicious/unknown bots' and 
-                 * 'known/official crawlers'.
-                 */
-                $state->isOfficialBot = true;
-
-                // Stop further iteration within this analyzer once a match is found
-                break;
-            }
-        }
+        // The logic is now encapsulated in the base class
+        $this->executeRules($log, $state, $params);
     }
 }

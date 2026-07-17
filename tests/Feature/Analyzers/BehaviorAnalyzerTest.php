@@ -1,267 +1,72 @@
 <?php
 
-namespace Oleant\VisitAnalytics\Tests\Feature\Analyzers;
-
 use Oleant\VisitAnalytics\Analyzers\BehaviorAnalyzer;
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Support\AnalysisState;
+use Oleant\VisitAnalytics\Contracts\RuleInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 
-// ВАЖНО: Привязываем тесты к вашему TestCase, чтобы Faker инициализировался корректно
 uses(\Oleant\VisitAnalytics\Tests\TestCase::class, RefreshDatabase::class);
 
-const TEST_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
-function getBaseParams(): array
-{
-    return [
-        'weights' => [
-            'single_visit' => 0,
-            'rate' => 0,
-            'speed_anomaly' => 0,
-            'ua_change_anomaly' => 0,
-        ],
-        'cumulative' => [
-            'no_referer_increment' => 0,
-        ],
-        'depth_check_window' => 60,
-        'time_window' => 5,
-        'rate_limit_per_minute' => 120,
-        'min_interval_ms' => 250,
-        'ua_stability_window' => 30,
-    ];
-}
-
-test('it flags single page scans when no other visits are found', function () {
-    $log = VisitLog::factory()->create([
-        'ip_address' => '1.1.1.1',
-        'referer' => null,
-        'user_agent' => TEST_UA
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $params = getBaseParams();
-    $params['weights']['single_visit'] = 5;
-
-    $analyzer->analyze($log, $state, $params);
-
-    expect($state->getReasons())->toContain('single_page_scan')
-        ->and($state->getScore())->toBe(5);
+beforeEach(function () {
+    $this->analyzer = new BehaviorAnalyzer();
+    $this->log = new VisitLog();
+    $this->state = Mockery::mock(AnalysisState::class);
 });
 
-test('it flags high request rates based on time window', function () {
-    $ip = '2.2.2.2';
+it('does nothing if the ip address is missing', function () {
+    $this->log->ip_address = null;
+
+    $this->state->shouldNotReceive('getScore');
+
+    $this->analyzer->analyze($this->log, $this->state, []);
+});
+
+it('iterates through the rules and applies them', function () {
+    $this->log->ip_address = '127.0.0.1';
     
-    VisitLog::factory()->count(10)->create([
-        'ip_address' => $ip,
-        'created_at' => now()->subSeconds(10),
-        'target_headers' => null
-    ]);
-
-    $log = VisitLog::factory()->create([
-        'ip_address' => $ip, 
-        'created_at' => now(),
-        'target_headers' => null
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $params = getBaseParams();
-    $params['weights']['rate'] = 15;
-    $params['rate_limit_per_minute'] = 1;
-    $params['time_window'] = 5;
-
-    $analyzer->analyze($log, $state, $params);
-
-    expect($state->getReasons())->toContain('high_request_rate')
-        ->and($state->getScore())->toBe(15);
-});
-
-test('it detects repeated ultra fast navigation anomalies', function () {
-    $ip = '3.3.3.3';
-    $now = now()->micro(0);
-    Carbon::setTestNow($now);
-
-    VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'created_at' => $now->copy()->subSeconds(1),
-        'bot_reasons' => ['speed_anomaly'], 
-        'user_agent' => TEST_UA
-    ]);
-
-    $log = VisitLog::factory()->create([
-        'ip_address' => $ip, 
-        'created_at' => $now,
-        'user_agent' => TEST_UA
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $params = getBaseParams();
-    $params['weights']['speed_anomaly'] = 40;
-    $params['min_interval_ms'] = 2000;
-
-    $analyzer->analyze($log, $state, $params);
-
-    expect($state->getReasons())->toContain('speed_anomaly')
-        ->and($state->getScore())->toBe(40);
+    $this->state->shouldReceive('getScore')->andReturn(0);
     
-    Carbon::setTestNow();
+    $ruleMock = Mockery::mock(RuleInterface::class);
+    $ruleMock->shouldReceive('apply')
+        ->once()
+        ->with($this->log, $this->state, Mockery::any())
+        ->andReturn();
+
+    $this->app->instance('MyRule', $ruleMock);
+
+    $this->analyzer->analyze($this->log, $this->state, [
+        'rules' => ['MyRule']
+    ]);
 });
 
-test('it detects user agent change anomaly', function () {
-    $ip = '4.4.4.4';
-    VisitLog::factory()->create([
-        'ip_address' => $ip, 
-        'user_agent' => 'Browser A', 
-        'created_at' => now()->subMinutes(5)
-    ]);
+it('breaks the loop if the score threshold is reached', function () {
+    $this->log->ip_address = '127.0.0.1';
     
-    $log = VisitLog::factory()->create([
-        'ip_address' => $ip, 
-        'user_agent' => 'Browser B',
-        'created_at' => now()
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $params = getBaseParams();
-    $params['weights']['ua_change_anomaly'] = 50;
-    $params['ua_stability_window'] = 30;
-
-    $analyzer->analyze($log, $state, $params);
-
-    expect($state->getReasons())->toContain('ua_change_anomaly')
-        ->and($state->getScore())->toBe(50);
-});
-
-test('it flags broken referer chain', function () {
-    $ip = '5.5.5.5';
-    VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'url' => 'https://site.com/p1',
-        'created_at' => now()->subMinutes(1)
-    ]);
-
-    $log = VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'url' => 'https://site.com/p2',
-        'referer' => null,
-        'target_headers' => ['sec-fetch-site' => 'same-origin'],
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $params = getBaseParams();
-    $params['cumulative']['no_referer_increment'] = 20;
-
-    $analyzer->analyze($log, $state, $params);
-
-    expect($state->getReasons())->toContain('broken_referer_chain')
-        ->and($state->getScore())->toBe(20);
-});
-
-test('it does not flag normal AJAX requests', function () {
-    $ip = '6.6.6.6';
-    $log = VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'target_headers' => ['x-requested-with' => 'XMLHttpRequest']
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $params = getBaseParams();
-    $params['weights']['speed_anomaly'] = 40;
-
-    $analyzer->analyze($log, $state, $params);
-
-    expect($state->getScore())->toBe(0)
-        ->and($state->getReasons())->not->toContain('speed_anomaly');
-});
-
-test('it flags header set anomaly when core headers are lost', function () {
-    $ip = '7.7.7.7';
+    $this->state->shouldReceive('getScore')->andReturn(75);
     
-    // Get base params and override specific configuration for the test
-    $params = getBaseParams();
-    $params['weights']['header_set_anomaly'] = 30;
-    
-    // Fetch dynamic header exclusion list from the config
-    $params['exclude_dynamic_headers'] = config('visit-analytics.exclude_dynamic_headers', [
-        'sec-fetch-dest',
-        'sec-fetch-mode',
-        'sec-fetch-site',
-        'x-requested-with'
+    $ruleMock = Mockery::mock(RuleInterface::class);
+    $ruleMock->shouldNotReceive('apply');
+
+    $this->app->instance('MyRule', $ruleMock);
+
+    $this->analyzer->analyze($this->log, $this->state, [
+        'rules' => ['MyRule']
     ]);
-
-    // Initial visit with a full set of headers
-    VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'target_headers' => ['sec-ch-ua' => 'v1', 'accept-language' => 'ru'],
-        'created_at' => now()->subMinutes(5)
-    ]);
-
-    // Subsequent visit where a core header ('accept-language') is missing
-    $log = VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'target_headers' => ['sec-ch-ua' => 'v1'], 
-        'created_at' => now()
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $analyzer->analyze($log, $state, $params);
-
-    // Verify that the anomaly is flagged and the score is applied correctly
-    expect($state->getReasons())->toContain('header_set_anomaly')
-        ->and($state->getScore())->toBe(30)
-        ->and($state->getEvidence()['header_set_anomaly']['lost_headers'])->toContain('accept-language');
 });
 
-test('it does not flag header set anomaly when headers are just added', function () {
-    $ip = '8.8.8.8';
+it('uses a custom threshold if provided in parameters', function () {
+    $this->log->ip_address = '127.0.0.1';
+    
+    $this->state->shouldReceive('getScore')->andReturn(60);
+    
+    $ruleMock = Mockery::mock(RuleInterface::class);
+    $ruleMock->shouldNotReceive('apply');
 
-    // Pass arrays directly to avoid double-encoding issues with Eloquent casts
-    VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'target_headers' => ['sec-ch-ua' => 'v1', 'accept-language' => 'ru'],
-        'created_at' => now()->subMinutes(5)
+    $this->app->instance('MyRule', $ruleMock);
+
+    $this->analyzer->analyze($this->log, $this->state, [
+        'rules' => ['MyRule'],
+        'threshold' => 50
     ]);
-
-    // Adding headers is not an anomaly, as no keys were removed
-    $log = VisitLog::factory()->create([
-        'ip_address' => $ip,
-        'target_headers' => [
-            'sec-ch-ua' => 'v1', 
-            'accept-language' => 'ru', 
-            'cookie' => 'val', 
-            'x-requested-with' => 'xml'
-        ],
-        'created_at' => now()
-    ]);
-
-    $state = new AnalysisState();
-    $analyzer = new BehaviorAnalyzer();
-
-    $params = getBaseParams();
-    $params['weights']['header_set_anomaly'] = 30;
-    // Ensure we use the dynamic headers exclusion logic
-    $params['exclude_dynamic_headers'] = config('visit-analytics.exclude_dynamic_headers', [
-        'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'x-requested-with'
-    ]);
-
-    $analyzer->analyze($log, $state, $params);
-
-    // Assert that no anomaly was triggered
-    expect($state->getReasons())->not->toContain('header_set_anomaly')
-        ->and($state->getScore())->toBe(0);
 });

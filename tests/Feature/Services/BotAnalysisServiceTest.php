@@ -29,23 +29,26 @@ beforeEach(function () {
 it('correctly orchestrates analyzers and returns AnalysisResult', function () {
     // 1. Mock an analyzer
     $analyzerMock = Mockery::mock(BotAnalyzerInterface::class);
+    
+    // Use Mockery::subset to allow additional keys like 'threshold'
     $analyzerMock->shouldReceive('analyze')
         ->once()
-        ->with($this->log, Mockery::type(AnalysisState::class), ['custom' => 'param'])
+        ->with($this->log, Mockery::type(AnalysisState::class), Mockery::subset(['custom' => 'param']))
         ->andReturnUsing(function ($log, AnalysisState $state) {
-            $state->score += 50;
+            $state->score = 50;
             $state->reasons[] = 'Suspected behavior';
         });
 
-    // 2. Bind the mock to the container
-    app()->instance('MockAnalyzer', $analyzerMock);
+    // 2. Bind the mock to the container using a key
+    $mockKey = 'MockAnalyzer';
+    app()->instance($mockKey, $analyzerMock);
 
-    // 3. Set up the config
+    // 3. Set up the config with params
     config(['visit-analytics.detection_engine' => [
         'threshold' => 70,
         'analyzers' => [
             [
-                'class' => 'MockAnalyzer',
+                'class' => $mockKey,
                 'enabled' => true,
                 'params' => ['custom' => 'param']
             ]
@@ -128,7 +131,7 @@ it('continues analysis if an analyzer throws an exception', function () {
     expect($result->score)->toBe(25);
     expect($result->evidence)->toHaveKey('execution_errors');
     
-    // Since addEvidence currently overwrites the key, execution_errors is a direct array
+    // Check if the error details are correctly mapped in evidence
     $errorData = $result->evidence['execution_errors'];
     
     expect($errorData['analyzer'])->toBe('FailingAnalyzer')

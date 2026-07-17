@@ -89,4 +89,16 @@ class AnalysisState
     {
         return $this->evidence;
     }
+
+    /**
+     * Gets a specific piece of evidence by key.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getEvidenceValue(string $key, mixed $default = null): mixed
+    {
+        return $this->evidence[$key] ?? $default;
+    }
 }
