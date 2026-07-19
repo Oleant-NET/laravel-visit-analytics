@@ -44,7 +44,8 @@ class BotAnalysisService
                 
                 // Pass only the 'params' sub-array to ensure encapsulation
                 $analyzer->analyze($log, $state, array_merge((array)($settings['params'] ?? []), [
-                    'threshold' => $threshold
+                    'threshold' => $threshold,
+		    'rules' => $settings['rules'],
                 ]));
 
             } catch (Throwable $e) {

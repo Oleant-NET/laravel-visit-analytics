@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.1] — 2026-07-19
+### Fixed
+- **Configuration:** Resolved an issue where analysis rules were not being correctly passed from the configuration to the analyzers. This ensures that custom thresholds and behavior weights are now properly applied during bot analysis.
+
 ## [2.6.0] — 2026-07-17
 ### Added
 - **Behavioral Analysis:** Implemented `suspicious_entry` detection in `BehaviorAnalyzer`. The system now identifies and flags (with a configurable weight) bots that initiate sessions on internal pages by spoofing an internal referer without having a corresponding entry point in the session history.
