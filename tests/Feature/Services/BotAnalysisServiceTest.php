@@ -4,7 +4,7 @@ namespace Oleant\VisitAnalytics\Tests\Feature\Services;
 
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Oleant\VisitAnalytics\Services\BotAnalysisService;
-use Oleant\VisitAnalytics\Contracts\BotAnalyzerInterface;
+use Oleant\VisitAnalytics\Contracts\RuleInterface;
 use Oleant\VisitAnalytics\DTO\AnalysisResult;
 use Oleant\VisitAnalytics\Support\AnalysisState;
 use Mockery;
@@ -14,7 +14,6 @@ uses(\Oleant\VisitAnalytics\Tests\TestCase::class);
 beforeEach(function () {
     VisitLog::truncate();
     
-    // Create a dummy log for analysis
     $this->log = VisitLog::create([
         'ip_address' => '1.1.1.1',
         'user_agent' => 'Test Agent',
@@ -24,33 +23,25 @@ beforeEach(function () {
 
 /**
  * @test
- * Verifies that the service correctly orchestrates a chain of analyzers.
  */
-it('correctly orchestrates analyzers and returns AnalysisResult', function () {
-    // 1. Mock an analyzer
-    $analyzerMock = Mockery::mock(BotAnalyzerInterface::class);
-    
-    // Use Mockery::subset to allow additional keys like 'threshold'
-    $analyzerMock->shouldReceive('analyze')
+it('correctly orchestrates rules and returns AnalysisResult', function () {
+    // Mock the RuleInterface
+    $ruleMock = Mockery::mock(RuleInterface::class);
+    $ruleMock->shouldReceive('apply')
         ->once()
-        ->with($this->log, Mockery::type(AnalysisState::class), Mockery::subset(['custom' => 'param']))
+        ->with($this->log, Mockery::type(AnalysisState::class), ['param' => 'value'])
         ->andReturnUsing(function ($log, AnalysisState $state) {
             $state->score = 50;
             $state->reasons[] = 'Suspected behavior';
         });
 
-    // 2. Bind the mock to the container using a key
-    $mockKey = 'MockAnalyzer';
-    app()->instance($mockKey, $analyzerMock);
+    app()->instance('TestRule', $ruleMock);
 
-    // 3. Set up the config with params
-    config(['visit-analytics.detection_engine' => [
+    config(['visit-analytics-detection' => [
         'threshold' => 70,
-        'analyzers' => [
-            [
-                'class' => $mockKey,
-                'enabled' => true,
-                'params' => ['custom' => 'param']
+        'rules' => [
+            'group1' => [
+                'TestRule' => ['param' => 'value']
             ]
         ]
     ]]);
@@ -58,7 +49,6 @@ it('correctly orchestrates analyzers and returns AnalysisResult', function () {
     $service = new BotAnalysisService();
     $result = $service->analyze($this->log);
 
-    // 4. Assertions
     expect($result)->toBeInstanceOf(AnalysisResult::class)
         ->and($result->score)->toBe(50)
         ->and($result->isBot)->toBeFalse()
@@ -67,93 +57,60 @@ it('correctly orchestrates analyzers and returns AnalysisResult', function () {
 
 /**
  * @test
- * Verifies that the analysis stops early once the threshold is met.
  */
 it('stops execution when the threshold is reached (early exit)', function () {
-    $analyzer1 = Mockery::mock(BotAnalyzerInterface::class);
-    $analyzer1->shouldReceive('analyze')->once()->andReturnUsing(function ($log, $state) {
-        $state->score = 100; // Trigger threshold immediately
+    $rule1 = Mockery::mock(RuleInterface::class);
+    $rule1->shouldReceive('apply')->once()->andReturnUsing(function ($log, $state) {
+        $state->score = 100;
     });
 
-    $analyzer2 = Mockery::mock(BotAnalyzerInterface::class);
-    $analyzer2->shouldReceive('analyze')->never(); // Should NOT be called
+    $rule2 = Mockery::mock(RuleInterface::class);
+    $rule2->shouldReceive('apply')->never();
 
-    app()->instance('A1', $analyzer1);
-    app()->instance('A2', $analyzer2);
+    app()->instance('R1', $rule1);
+    app()->instance('R2', $rule2);
 
-    config(['visit-analytics.detection_engine' => [
+    config(['visit-analytics-detection' => [
         'threshold' => 70,
-        'analyzers' => [
-            ['class' => 'A1', 'enabled' => true],
-            ['class' => 'A2', 'enabled' => true],
+        'rules' => [
+            'g1' => ['R1' => [], 'R2' => []]
         ]
     ]]);
 
-    $service = new BotAnalysisService();
-    $service->analyze($this->log);
+    (new BotAnalysisService())->analyze($this->log);
 });
 
 /**
  * @test
- * Checks that the service captures exceptions from analyzers, 
- * logs them into evidence, and continues with the next analyzer.
  */
-it('continues analysis if an analyzer throws an exception', function () {
-    // 1. Mock an analyzer that fails
-    $failingAnalyzer = Mockery::mock(BotAnalyzerInterface::class);
-    $failingAnalyzer->shouldReceive('analyze')
-        ->once()
-        ->andThrow(new \Exception('Test Error'));
+it('captures exceptions from rules and continues', function () {
+    $failingRule = Mockery::mock(RuleInterface::class);
+    $failingRule->shouldReceive('apply')->once()->andThrow(new \Exception('Rule failed'));
 
-    // 2. Mock a working analyzer to ensure the cycle doesn't break
-    $workingAnalyzer = Mockery::mock(BotAnalyzerInterface::class);
-    $workingAnalyzer->shouldReceive('analyze')
-        ->once()
-        ->andReturnUsing(function ($log, $state) {
-            $state->score = 25;
-        });
+    $workingRule = Mockery::mock(RuleInterface::class);
+    $workingRule->shouldReceive('apply')->once()->andReturnUsing(function ($log, $state) {
+        $state->score = 25;
+    });
 
-    app()->instance('FailingAnalyzer', $failingAnalyzer);
-    app()->instance('WorkingAnalyzer', $workingAnalyzer);
+    app()->instance('FailingRule', $failingRule);
+    app()->instance('WorkingRule', $workingRule);
 
-    config(['visit-analytics.detection_engine' => [
+    config(['visit-analytics-detection' => [
         'threshold' => 70,
-        'analyzers' => [
-            ['class' => 'FailingAnalyzer', 'enabled' => true],
-            ['class' => 'WorkingAnalyzer', 'enabled' => true],
+        'rules' => [
+            'g1' => ['FailingRule' => [], 'WorkingRule' => []]
         ]
     ]]);
 
-    $service = new BotAnalysisService();
-    $result = $service->analyze($this->log);
+    $result = (new BotAnalysisService())->analyze($this->log);
 
-    // Assertions
-    expect($result->score)->toBe(25);
-    expect($result->evidence)->toHaveKey('execution_errors');
-    
-    // Check if the error details are correctly mapped in evidence
-    $errorData = $result->evidence['execution_errors'];
-    
-    expect($errorData['analyzer'])->toBe('FailingAnalyzer')
-        ->and($errorData['error'])->toBe('Test Error');
-});
+    expect($result->score)->toBe(25)
+        ->and($result->evidence)->toHaveKey('execution_errors');
 
-/**
- * @test
- * Verifies that disabled analyzers are ignored.
- */
-it('ignores disabled analyzers', function () {
-    $disabledMock = Mockery::mock(BotAnalyzerInterface::class);
-    $disabledMock->shouldReceive('analyze')->never();
+    $errors = $result->evidence['execution_errors'];
 
-    app()->instance('Disabled', $disabledMock);
+    $errorData = is_array($errors) && isset($errors[0]) ? $errors[0] : $errors;
 
-    config(['visit-analytics.detection_engine' => [
-        'analyzers' => [
-            ['class' => 'Disabled', 'enabled' => false],
-        ]
-    ]]);
-
-    $service = new BotAnalysisService();
-    $service->analyze($this->log);
+    expect($errorData['rule'])->toBe('FailingRule')
+        ->and($errorData['error'])->toBe('Rule failed');
 });

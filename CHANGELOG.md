@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-07-22
+### Changed
+- **Breaking Change**: Complete architectural refactoring. Removed legacy `Analyzer` classes in favor of an atomic, `Rule`-driven execution engine based on composition and traits.
+- **Configuration**: The configuration structure has been modularized and split into three dedicated files:
+    - `visit-analytics-collection.php` (storage, GDPR anonymization, path/IP filters)
+    - `visit-analytics-detection.php` (registry of rules and their specific parameters)
+    - `visit-analytics-retroactive.php` (cron settings and lookback window parameters)
+- **Migration**: Old single-file configuration is no longer compatible. Please run `php artisan vendor:publish --tag=visit-analytics-config --force` to regenerate all configuration files.
+- **Rules Engine**: Rules are now isolated, atomic classes implementing `RuleInterface`. Each rule accepts its own parameter subset directly from the configuration, making testing and custom rule additions frictionless.
+
+### Removed
+- **Legacy Analyzers**: Completely removed the old `Analyzer` hierarchy and `AbstractAnalyzer` god-object in favor of clean, single-responsibility traits (e.g., `BehaviorAnalysis`).
+
+## [2.6.1] — 2026-07-19
+### Fixed
+- **Configuration:** Resolved an issue where analysis rules were not being correctly passed from the configuration to the analyzers. This ensures that custom thresholds and behavior weights are now properly applied during bot analysis.
+
 ## [2.6.0] — 2026-07-17
 ### Added
 - **Behavioral Analysis:** Implemented `suspicious_entry` detection in `BehaviorAnalyzer`. The system now identifies and flags (with a configurable weight) bots that initiate sessions on internal pages by spoofing an internal referer without having a corresponding entry point in the session history.

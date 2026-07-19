@@ -21,47 +21,37 @@ class BotAnalysisService
      * @param VisitLog $log The raw visit log to be processed.
      * @return AnalysisResult The final result containing score, verdict, and evidence.
      */
-    public function analyze(VisitLog $log): AnalysisResult
+public function analyze(VisitLog $log): AnalysisResult
     {
-        $engineConfig = config('visit-analytics.detection_engine', []);
+        $engineConfig = config('visit-analytics-detection', []);
         
-        /** @var int $threshold The score at which a visitor is classified as a bot */
         $threshold = (int)($engineConfig['threshold'] ?? 70);
-        
-        /** @var array $analyzers List of enabled analyzer configurations */
-        $analyzers = $engineConfig['analyzers'] ?? [];
+        $ruleGroups = $engineConfig['rules'] ?? [];
 
         $state = new AnalysisState();
 
-        foreach ($analyzers as $settings) {
-            if (!($settings['enabled'] ?? false)) {
-                continue;
-            }
+        foreach ($ruleGroups as $group => $rules) {
+            foreach ($rules as $class => $params) {
+                try {
+                    /** @var \Oleant\VisitAnalytics\Contracts\RuleInterface $rule */
+                    $rule = app($class);
+                    
+                    $rule->apply($log, $state, $params);
 
-            try {
-                /** @var \Oleant\VisitAnalytics\Contracts\BotAnalyzerInterface $analyzer */
-                $analyzer = app($settings['class']);
-                
-                // Pass only the 'params' sub-array to ensure encapsulation
-                $analyzer->analyze($log, $state, array_merge((array)($settings['params'] ?? []), [
-                    'threshold' => $threshold
-                ]));
+                } catch (Throwable $e) {
+                    report($e);
+                    $state->addEvidence('execution_errors', [
+                        'group' => $group,
+                        'rule'  => $class,
+                        'error' => $e->getMessage(),
+                    ]);
+                    continue;
+                }
 
-            } catch (Throwable $e) {
-                // Report the error to the logs/Sentry without breaking the loop
-                report($e);
-
-                $state->addEvidence('execution_errors', [
-                    'analyzer' => $settings['class'],
-                    'error'    => $e->getMessage(),
-                ]);
-                
-                continue;
-            }
-
-            // Early Exit: Stop execution if the threshold is already met or exceeded
-            if ($state->score >= $threshold) {
-                break;
+                // Early Exit
+                if ($state->score >= $threshold) {
+                    break 2;
+                }
             }
         }
 

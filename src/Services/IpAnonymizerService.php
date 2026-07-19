@@ -25,7 +25,7 @@ class IpAnonymizerService
             return null;
         }
 
-        $config = config('visit-analytics.collection.anonymization', []);
+        $config = config('visit-analytics-collection.anonymization', []);
 
         // Check if anonymization is globally enabled
         if (!($config['anonymize_ip'] ?? true)) {
@@ -52,16 +52,16 @@ class IpAnonymizerService
     {
         // IPv6 Masking: Applying /64 prefix (masking last 64 bits)
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            $binaryIp = inet_pton($ip);
-            $mask = inet_pton('ffff:ffff:ffff:ffff:0000:0000:0000:0000');
-            return inet_ntop($binaryIp & $mask);
+            $packed = inet_pton($ip);
+            $mask = str_repeat("\xff", 8) . str_repeat("\x00", 8);
+            return inet_ntop($packed & $mask);
         }
 
-        // IPv4 Masking: Ensure it's a valid IPv4 before applying regex
+        // IPv4 Masking
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            return preg_replace('/(\d+)\.(\d+)\.(\d+)\.(\d+)/', '$1.$2.$3.0', $ip);
+            return long2ip(ip2long($ip) & ~255);
         }
 
-        return $ip; // Fallback if IP is invalid
+        return $ip;
     }
 }

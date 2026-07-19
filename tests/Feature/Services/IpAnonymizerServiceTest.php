@@ -52,13 +52,13 @@ it('handles ipv4 mapped ipv6 correctly', function () {
 // --- Config & Security Tests ---
 
 it('returns original IP when global anonymization is disabled', function () {
-    Config::set('visit-analytics.collection.anonymization.anonymize_ip', false);
+    Config::set('visit-analytics-collection.anonymization.anonymize_ip', false);
     $service = new IpAnonymizerService();
     expect($service->handle('192.168.1.15'))->toBe('192.168.1.15');
 });
 
 it('handles async mode correctly', function () {
-    Config::set('visit-analytics.collection.anonymization.anonymize_mode', 'async');
+    Config::set('visit-analytics-collection.anonymization.anonymize_mode', 'async');
     $service = new IpAnonymizerService();
     
     // Should NOT anonymize in default mode

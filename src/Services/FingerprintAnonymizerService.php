@@ -20,7 +20,7 @@ class FingerprintAnonymizerService
      */
     public function handle(VisitLog $log): array
     {
-        $config = config('visit-analytics.collection.anonymization', []);
+        $config = config('visit-analytics-collection.anonymization', []);
         
         $updates = [];
 
@@ -29,11 +29,11 @@ class FingerprintAnonymizerService
         }
 
         if ($config['anonymize_headers'] ?? true) {
-            $updates['target_headers'] = $this->anonymizeHeaders($log->target_headers);
+            $updates['target_headers'] = $this->anonymizeHeaders($log->target_headers ?? []);
         }
 
         if ($config['anonymize_fingerprint_hash'] ?? true) {
-            $updates['fingerprint_hash'] = $this->config['fingerprint_placeholder'] ?? 'anonym-sha256-ready';
+            $updates['fingerprint_hash'] = $config['fingerprint_placeholder'] ?? 'anonym-sha256-ready';
         }
 
         return $updates;

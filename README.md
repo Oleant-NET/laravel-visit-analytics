@@ -4,7 +4,7 @@ Lightweight, privacy-focused visit analytics for Laravel 10, 11, and 12. Track U
 
 ## Features
 - **Distributed Botnet Protection**: (New v2.2) Detects coordinated botnet clusters by analyzing traffic spikes across multiple IPs and cross-referencing with a fingerprint database.
-- **Modular Analyzer Engine**: 12 specialized layers including Botnet Reputation, Behavioral, and Network integrity analysis.
+- **Atomic Rules Engine**: (New v3.0) Decoupled detection architecture powered by independent, trait-based rules and granular declarative configuration.
 - **Smart Bot Detection**: Advanced behavioral analysis including Referer-loop detection and page-refresh awareness.
 - **Bot Scoring System**: Assigns a score based on access speed, DNS records, and honeypot hits.
 - **Retroactive Flagging**: Identifies previous visits from an IP once it's confirmed as a bot (Snowball Effect).
@@ -31,23 +31,30 @@ php artisan migrate
 
 ## Configuration
 
-* analyzers.botnet: Settings for cluster detection thresholds and reputation database weights.
+Version 3.0.0 introduces a clean, modular configuration split into three dedicated files for maximum clarity and separation of concerns:
 
-> **Note for Upgraders (v1.x to v2.0):** This version introduces a completely new configuration schema. You must backup your old settings and republish the config file.
+1. **`visit-analytics-collection.php`**: Manages visit logging, GDPR anonymization policies, request query param whitelists, and path/IP exclusion filters.
+2. **`visit-analytics-detection.php`**: Acts as a registry for active detection rules and their individual tuning parameters (e.g., thresholds, scores).
+3. **`visit-analytics-retroactive.php`**: Controls cron execution limits and retroactive snowball/lookback windows.
 
-Run command (BASH):
+> **Note for Upgraders (v2.x to v3.0):** This version introduces a breaking architectural rewrite. You must force-republish the new configuration suite:
+
+**Run command (BASH):**
 ```bash
 php artisan vendor:publish --tag="visit-analytics-config" --force
 ```
 
-### Key Config Options:
-The configuration is now organized by specialized Analyzers:
-* analyzers.behavior: Configure request frequency and timing thresholds.
-* analyzers.ua: Rules for User-Agent parsing and Client-Hints validation.
-* analyzers.network: Settings for DNSBL, PTR records, and IP reputation.
-* analyzers.headers: Checks for missing or inconsistent browser headers.
-* exclude.ips: List of IP addresses to ignore.
-* exclude.paths: URL patterns to skip (e.g., ['admin*', 'api/*']).
+**Key Config Options (visit-analytics-detection.php):**
+Rules are now declared as a mapping of class names to their custom parameter sets:
+
+```PHP
+'behavioral' => [
+    \Oleant\VisitAnalytics\Rules\Behavioral\SpeedAnomalyRule::class => [
+        'min_interval_ms' => 250,
+        'score'           => 20,
+    ],
+],
+```
 
 ## Usage
 

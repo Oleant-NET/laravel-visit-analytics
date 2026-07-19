@@ -73,31 +73,23 @@ it('respects the max limit option', function () {
  * Confirms that the command triggers the underlying analysis logic.
  */
 it('updates bot status after command execution', function () {
-    // 1. Create a mock analyzer that forces a "bot" verdict
-    $mockAnalyzer = Mockery::mock(\Oleant\VisitAnalytics\Contracts\BotAnalyzerInterface::class);
-    $mockAnalyzer->shouldReceive('analyze')
+    $analysisResult = new \Oleant\VisitAnalytics\DTO\AnalysisResult(
+        isBot: true,
+        isOfficialBot: false,
+        score: 100,
+        reasons: ['Honeypot hit'],
+        evidence: ['test' => 'data'],
+        newLookups: 0
+    );
+
+    $mockService = Mockery::mock(\Oleant\VisitAnalytics\Services\BotAnalysisService::class);
+
+    $mockService->shouldReceive('analyze')
         ->once()
-        ->andReturnUsing(function ($log, $state) {
-            $state->score = 100; // Force bot status
-            $state->reasons[] = 'Honeypot hit';
-        });
+        ->andReturn($analysisResult);
 
-    // 2. Register mock in the container
-    app()->instance('ForcedBotAnalyzer', $mockAnalyzer);
+    app()->instance(\Oleant\VisitAnalytics\Services\BotAnalysisService::class, $mockService);
 
-    // 3. Configure the command to use this mock
-    config(['visit-analytics.detection_engine' => [
-        'threshold' => 70,
-        'analyzers' => [
-            [
-                'class' => 'ForcedBotAnalyzer',
-                'enabled' => true,
-                'params' => []
-            ]
-        ]
-    ]]);
-
-    // 4. Create the log entry
     $log = VisitLog::create([
         'ip_address' => '3.3.3.3',
         'user_agent' => 'EvilBot',
@@ -105,10 +97,8 @@ it('updates bot status after command execution', function () {
         'processed_at' => null
     ]);
 
-    // 5. Execute command
     $this->artisan('visit-analytics:analyze-bots');
 
-    // 6. Assertions
     $log->refresh();
     
     expect($log->processed_at)->not->toBeNull()
