@@ -11,10 +11,15 @@ class VisitAnalyticsServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Merge package configuration with the application's copy
-        $this->mergeConfigFrom(
-            __DIR__.'/../config/visit-analytics.php', 'visit-analytics'
-        );
+        $configs = [
+            'visit-analytics-collection'   => 'visit-analytics-collection.php',
+            'visit-analytics-detection'    => 'visit-analytics-detection.php',
+            'visit-analytics-retroactive'  => 'visit-analytics-retroactive.php',
+        ];
+
+        foreach ($configs as $key => $file) {
+            $this->mergeConfigFrom(__DIR__.'/../config/'.$file, $key);
+        }
     }
 
     /**
@@ -22,22 +27,20 @@ class VisitAnalyticsServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Load package migrations automatically
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
             
-            // Registering the bot analysis command
             $this->commands([
                 \Oleant\VisitAnalytics\Console\Commands\AnalyzeBots::class,
             ]);
 
-            // Publishing the configuration file
             $this->publishes([
-                __DIR__.'/../config/visit-analytics.php' => config_path('visit-analytics.php'),
+                __DIR__.'/../config/visit-analytics-collection.php'   => config_path('visit-analytics-collection.php'),
+                __DIR__.'/../config/visit-analytics-detection.php'    => config_path('visit-analytics-detection.php'),
+                __DIR__.'/../config/visit-analytics-retroactive.php'  => config_path('visit-analytics-retroactive.php'),
             ], 'visit-analytics-config');
 
-            // Publishing migrations for manual customization
             $this->publishes([
                 __DIR__.'/../database/migrations' => database_path('migrations'),
             ], 'visit-analytics-migrations');

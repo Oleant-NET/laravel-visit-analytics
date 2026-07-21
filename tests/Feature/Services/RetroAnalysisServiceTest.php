@@ -11,7 +11,7 @@ beforeEach(function () {
     VisitLog::truncate();
 
     config([
-        'visit-analytics.retro_analysis' => [
+        'visit-analytics-retroactive' => [
             'session_window' => 60,
             // Lower threshold for testing purposes
             'burst_threshold' => 3,
@@ -27,8 +27,6 @@ it('detects and flags rapid document request bursts', function () {
     $ip = '192.168.1.1';
     $ua = 'Mozilla/5.0 (Test Agent)';
 
-    // Create document requests only.
-    // Ajax/widget requests must NOT trigger this analysis.
     VisitLog::factory()
         ->count(3)
         ->create([
@@ -36,9 +34,7 @@ it('detects and flags rapid document request bursts', function () {
             'user_agent' => $ua,
             'is_bot' => false,
             'created_at' => now()->subMinutes(2),
-            'target_headers' => [
-                'sec-fetch-dest' => 'document',
-            ],
+            'target_headers' => ['sec-fetch-dest' => 'document'],
         ]);
 
     $service = new RetroAnalysisService();
@@ -125,7 +121,7 @@ it('backfills preceding requests for confirmed bot IPs', function () {
  */
 it('ignores logs outside of the lookback period', function () {
     config([
-        'visit-analytics.retro_analysis.lookback_minutes' => 5
+        'visit-analytics-retroactive.lookback_minutes' => 5
     ]);
 
     VisitLog::factory()
@@ -220,7 +216,7 @@ it('does not backfill unrelated historical traffic', function () {
  */
 it('logs errors but returns 0 if an exception occurs', function () {
     config([
-        'visit-analytics.retro_analysis.lookback_minutes' => 'invalid'
+        'visit-analytics-retroactive.lookback_minutes' => 'invalid'
     ]);
 
     $service = new RetroAnalysisService();
@@ -235,8 +231,8 @@ it('logs errors but returns 0 if an exception occurs', function () {
 it('caps lookback minutes if it exceeds retention period', function () {
     // Set retention to 10 mins and lookback to 20 mins to trigger the cap
     config([
-        'visit-analytics.anonymization.retention_minutes' => 10,
-        'visit-analytics.retro_analysis.lookback_minutes' => 20,
+        'visit-analytics-collection.anonymization.retention_minutes' => 10,
+        'visit-analytics-retroactive.lookback_minutes' => 20,
     ]);
 
     $service = new RetroAnalysisService();

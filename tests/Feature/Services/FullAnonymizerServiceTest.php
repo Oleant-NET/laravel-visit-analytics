@@ -97,7 +97,7 @@ it('skips logs inside retention window', function () {
  */
 
 it('skips bot logs when anonymize_bots is disabled', function () {
-    Config::set('visit-analytics.collection.anonymization.anonymize_bots', false);
+    Config::set('visit-analytics-collection.anonymization.anonymize_bots', false);
 
     $log = VisitLog::factory()->create([
         'processed_at' => now(),

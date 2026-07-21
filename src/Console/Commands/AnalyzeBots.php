@@ -38,15 +38,6 @@ class AnalyzeBots extends Command
     protected array $config = [];
 
     /**
-     * AnalyzeBots constructor.
-     */
-    public function __construct()
-    {
-        parent::__construct();
-        $this->config = config('visit-analytics.behavioral_analysis', []);
-    }
-
-    /**
      * Execute the console command.
      *
      * @param BotAnalysisService $botAnalysisService
@@ -61,7 +52,14 @@ class AnalyzeBots extends Command
     ): int {
         $maxTotal = (int) $this->option('max');
         $isFull = (bool) $this->option('full');
-        $threshold = (int) ($this->config['threshold'] ?? 70);
+
+        $detectionConfig = config('visit-analytics-detection', []);
+        if (!$detectionConfig) {
+            $this->error("Configuration 'visit-analytics-detection' not found. Please publish the config files.");
+            return self::FAILURE;
+        }
+        
+        $threshold = (int) ($detectionConfig['threshold'] ?? 70);
 
         $processedCount = 0;
         $botsDetected = 0;

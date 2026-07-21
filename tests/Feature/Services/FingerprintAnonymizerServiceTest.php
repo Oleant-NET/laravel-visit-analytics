@@ -9,7 +9,7 @@ use Oleant\VisitAnalytics\Services\FingerprintAnonymizerService;
 uses(TestCase::class, RefreshDatabase::class);
 
 beforeEach(function () {
-    Config::set('visit-analytics.collection.anonymization', [
+    Config::set('visit-analytics-collection.anonymization', [
         'anonymize_ua' => true,
         'anonymize_headers' => true,
         'anonymize_fingerprint_hash' => true,
@@ -88,7 +88,7 @@ it('parses legacy user agent string', function () {
 });
 
 it('skips user agent anonymization when disabled', function () {
-    Config::set('visit-analytics.collection.anonymization.anonymize_ua', false);
+    Config::set('visit-analytics-collection.anonymization.anonymize_ua', false);
 
     $log = VisitLog::factory()->make([
         'user_agent' => 'Mozilla/5.0 Windows NT Chrome',
@@ -144,7 +144,7 @@ it('replaces fingerprint hash with placeholder', function () {
 });
 
 it('keeps fingerprint hash when disabled', function () {
-    Config::set('visit-analytics.collection.anonymization.anonymize_fingerprint_hash', false);
+    Config::set('visit-analytics-collection.anonymization.anonymize_fingerprint_hash', false);
 
     $log = VisitLog::factory()->make([
         'fingerprint_hash' => 'abc123',

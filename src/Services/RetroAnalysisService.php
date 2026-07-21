@@ -4,12 +4,14 @@ namespace Oleant\VisitAnalytics\Services;
 
 use Oleant\VisitAnalytics\Models\VisitLog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class RetroAnalysisService
  *
- * background analysis of anonymized traffic patterns.
- * Optimized with pre-loaded configuration and batch updates.
+ * Performs background analysis of anonymized traffic patterns.
+ * Optimized to handle batch-like updates while ensuring JSON integrity 
+ * across different database drivers (especially SQLite).
  */
 class RetroAnalysisService
 {
@@ -22,32 +24,18 @@ class RetroAnalysisService
     /** @var int How many minutes back to look for logs */
     protected int $lookbackMinutes;
 
-    /**
-     * RetroAnalysisService constructor.
-     * * Initializes the service with configuration parameters. It enforces a safety
-     * constraint on 'lookback_minutes' to ensure it does not exceed the data
-     * retention period, preventing the analysis of already anonymized IP data.
-     */
     public function __construct()
     {
-        $retroConfig = config('visit-analytics.retro_analysis', []);
-        
-        // Retrieve the global retention window to ensure analysis consistency.
-        // Default to 60 minutes if not specified.
-        $retention = (int) config('visit-analytics.anonymization.retention_minutes', 30);
+        $retroConfig = config('visit-analytics-retroactive', []);
+        $retention = (int) config('visit-analytics-collection.anonymization.retention_minutes', 30);
 
         $this->sessionWindow   = (int)($retroConfig['session_window'] ?? 60);
         $this->burstThreshold  = (int)($retroConfig['burst_threshold'] ?? 15);
         
         $lookback = (int)($retroConfig['lookback_minutes'] ?? 15);
 
-        // Enforce safety: lookback period cannot exceed the IP retention period.
-        // If the user's configuration is too aggressive, cap it and log a warning.
         if ($lookback > $retention) {
-            \Log::warning("VisitAnalytics: retro_analysis.lookback_minutes ({$lookback}) exceeds " .
-                          "anonymization.retention_minutes ({$retention}). " .
-                          "Capping lookback to {$retention} minutes to prevent processing anonymized data.");
-            
+            Log::warning("VisitAnalytics: lookback_minutes ({$lookback}) exceeds retention_minutes ({$retention}). Capping to {$retention}.");
             $this->lookbackMinutes = $retention;
         } else {
             $this->lookbackMinutes = $lookback;
@@ -56,27 +44,19 @@ class RetroAnalysisService
 
     /**
      * Executes the retroactive analysis workflow.
-     * Uses a try-catch block to ensure cron stability.
+     * 
+     * @return int Total number of logs updated as bots.
      */
     public function handle(): int
     {
-        $updated = 0;
-
         try {
-            // 1. Detect rapid request bursts (Density analysis)
-            $updated += $this->processBursts();
-
-            // 2. Backfill confirmed bot hits (Session cleanup)
-            $updated += $this->backfillConfirmedBots();
-
+            return $this->processBursts() + $this->backfillConfirmedBots();
         } catch (\Throwable $e) {
-            \Log::error("RetroAnalysisService failed: " . $e->getMessage(), [
-                'exception' => $e,
-                'trace' => $e->getTraceAsString(),
+            Log::error("RetroAnalysisService failed: " . $e->getMessage(), [
+                'exception' => $e
             ]);
+            return 0;
         }
-
-        return $updated;
     }
 
     /**
@@ -92,109 +72,93 @@ class RetroAnalysisService
             ->having('request_count', '>=', $this->burstThreshold)
             ->get();
 
-        if ($suspiciousActors->isEmpty()) {
-            return 0;
-        }
-
         $totalAffected = 0;
-
         foreach ($suspiciousActors as $actor) {
-            $logs = VisitLog::query()
-                ->where('ip_address', $actor->ip_address)
+            $logs = VisitLog::where('ip_address', $actor->ip_address)
                 ->where('user_agent', $actor->user_agent)
                 ->where('created_at', '>=', now()->subMinutes($this->lookbackMinutes))
                 ->get();
 
             foreach ($logs as $log) {
-                $currentReasons = $log->bot_reasons ?? [];
-                if (!in_array('burst_density_exceeded', $currentReasons)) {
-                    $currentReasons[] = 'burst_density_exceeded';
+                if ($this->applyBotStatus($log, 'burst_density_exceeded', [
+                    'retro_burst' => [
+                        'count' => $actor->request_count,
+                        'threshold' => $this->burstThreshold,
+                        'analyzed_at' => now()->toDateTimeString()
+                    ]
+                ])) {
+                    $totalAffected++;
                 }
-
-                $currentEvidence = $log->bot_evidence ?? [];
-                $currentEvidence['retro_burst'] = [
-                    'count' => $actor->request_count,
-                    'threshold' => $this->burstThreshold,
-                    'analyzed_at' => now()->toDateTimeString()
-                ];
-
-                $log->update([
-                    'is_bot'       => true,
-                    'bot_score'    => max($log->bot_score ?? 0, 100),
-                    'bot_reasons'  => $currentReasons,
-                    'bot_evidence' => $currentEvidence,
-                    'processed_at' => $log->processed_at ?? now(), 
-                ]);
-                
-                $totalAffected++;
             }
         }
-
         return $totalAffected;
     }
 
     /**
      * Backfills preceding requests for already flagged bot IPs within the session window.
-     * * This method complements primary analysis by flagging early "quiet" hits 
-     * without overwriting existing reasons or evidence.
      */
     protected function backfillConfirmedBots(): int
     {
-        // 1. Get unique masked IPs that were flagged as bots in the lookback period
-        $flaggedData = VisitLog::query()
-            ->select('ip_address', DB::raw('MIN(created_at) as earliest_bot_hit'))
+        $flaggedData = VisitLog::select('ip_address', DB::raw('MIN(created_at) as earliest_bot_hit'))
             ->where('is_bot', true)
             ->where('processed_at', '>=', now()->subMinutes($this->lookbackMinutes))
             ->groupBy('ip_address')
             ->get();
 
-        if ($flaggedData->isEmpty()) {
-            return 0;
-        }
+        if ($flaggedData->isEmpty()) return 0;
 
         $flaggedIps = $flaggedData->pluck('ip_address')->toArray();
         $minCreatedAt = $flaggedData->min('earliest_bot_hit');
 
-        $affected = 0;
-        $backfillReason = 'retroactive_session_backfill';
-
-        // 2. Find all "clean" records for these IPs within the tight session window (60s)
-        $logsToBackfill = VisitLog::query()
-            ->whereIn('ip_address', $flaggedIps)
+        $logsToBackfill = VisitLog::whereIn('ip_address', $flaggedIps)
             ->where('is_bot', false)
             ->where('created_at', '>=', \Carbon\Carbon::parse($minCreatedAt)->subSeconds($this->sessionWindow))
-            ->where('created_at', '<=', now())
             ->get();
 
+        $affected = 0;
         foreach ($logsToBackfill as $log) {
-            // --- SAFE MERGE REASONS ---
-            $reasons = $log->bot_reasons ?? [];
-            if (!in_array($backfillReason, $reasons)) {
-                $reasons[] = $backfillReason;
+            if ($this->applyBotStatus($log, 'retroactive_session_backfill', [
+                'retro_backfill' => [
+                    'source' => 'session_correlation',
+                    'session_window' => $this->sessionWindow,
+                    'confirmed_at' => now()->toDateTimeString()
+                ]
+            ])) {
+                $affected++;
             }
+        }
+        return $affected;
+    }
 
-            // --- SAFE MERGE EVIDENCE ---
-            $evidence = $log->bot_evidence ?? [];
-            $evidence['retro_backfill'] = [
-                'source' => 'session_correlation',
-                'session_window' => $this->sessionWindow,
-                'confirmed_at' => now()->toDateTimeString()
-            ];
-
-            // --- UPDATE WITHOUT OVERWRITING ---
-            $log->update([
-                'is_bot'       => true,
-                // Use max() to ensure we never lower a score if it was already high
-                'bot_score'    => max($log->bot_score ?? 0, 100),
-                'bot_reasons'  => $reasons,
-                'bot_evidence' => $evidence,
-                // Keep original processed_at if it exists, otherwise set now
-                'processed_at' => $log->processed_at ?? now(),
-            ]);
-
-            $affected++;
+    /**
+     * Centralized update logic to ensure JSON data integrity.
+     * This handles the "bottleneck" by ensuring we don't rely on auto-casting 
+     * during raw updates, maintaining compatibility across database drivers.
+     *
+     * @param VisitLog $log
+     * @param string $reason
+     * @param array $evidence
+     * @return bool
+     */
+    protected function applyBotStatus(VisitLog $log, string $reason, array $evidence): bool
+    {
+        $reasons = (array) ($log->bot_reasons ?? []);
+        if (!in_array($reason, $reasons)) {
+            $reasons[] = $reason;
         }
 
-        return $affected;
+        $currentEvidence = (array) ($log->bot_evidence ?? []);
+        $mergedEvidence = array_merge($currentEvidence, $evidence);
+
+        // We use update() by ID to maintain performance, but we explicitly 
+        // json_encode() arrays to guarantee SQLite consistency regardless 
+        // of model $casts settings or $timestamps flag.
+        return (bool) VisitLog::where('id', $log->id)->update([
+            'is_bot'       => true,
+            'bot_score'    => max($log->bot_score ?? 0, 100),
+            'bot_reasons'  => json_encode($reasons),
+            'bot_evidence' => json_encode($mergedEvidence),
+            'processed_at' => $log->processed_at ?? now(),
+        ]);
     }
 }

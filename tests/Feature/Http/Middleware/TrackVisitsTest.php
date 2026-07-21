@@ -14,7 +14,7 @@ beforeEach(function () {
         return 'OK';
     })->middleware(TrackVisits::class);
 
-    config(['visit-analytics.collection.anonymization' => [
+    config(['visit-analytics-collection.anonymization' => [
         'anonymize_ip' => true,
         'anonymize_mode' => 'sync',
         'cookie_mode' => 'exists',
@@ -42,7 +42,7 @@ it('records a visit in the database', function () {
  */
 
 it('anonymizes ip addresses immediately when mode is set to sync', function () {
-    config(['visit-analytics.collection.anonymization.anonymize_mode' => 'sync']);
+    config(['visit-analytics-collection.anonymization.anonymize_mode' => 'sync']);
 
     $this->withServerVariables(['REMOTE_ADDR' => '192.168.1.55'])
          ->get('/test-page');
@@ -51,7 +51,7 @@ it('anonymizes ip addresses immediately when mode is set to sync', function () {
 });
 
 it('preserves full ip address for later bot analysis when mode is set to async', function () {
-    config(['visit-analytics.collection.anonymization.anonymize_mode' => 'async']);
+    config(['visit-analytics-collection.anonymization.anonymize_mode' => 'async']);
 
     $realIp = '1.2.3.4';
     $this->withServerVariables(['REMOTE_ADDR' => $realIp])
@@ -61,7 +61,7 @@ it('preserves full ip address for later bot analysis when mode is set to async',
 });
 
 it('skips anonymization entirely if anonymize_ip is disabled', function () {
-    config(['visit-analytics.collection.anonymization.anonymize_ip' => false]);
+    config(['visit-analytics-collection.anonymization.anonymize_ip' => false]);
 
     $realIp = '8.8.8.8';
     $this->withServerVariables(['REMOTE_ADDR' => $realIp])
@@ -87,7 +87,7 @@ it('stores timestamps with millisecond precision', function () {
  */
 
 it('excludes specific users by email address', function () {
-    config(['visit-analytics.collection.exclude.emails' => ['admin@oleant.dev']]);
+    config(['visit-analytics-collection.exclude.emails' => ['admin@oleant.dev']]);
 
     $user = Mockery::mock(Authenticatable::class);
     $user->shouldReceive('getAuthIdentifier')->andReturn(1);
@@ -99,7 +99,7 @@ it('excludes specific users by email address', function () {
 });
 
 it('excludes visits from blacklisted IP subnets using CIDR', function () {
-    config(['visit-analytics.collection.exclude.ips' => ['192.168.1.0/24']]);
+    config(['visit-analytics-collection.exclude.ips' => ['192.168.1.0/24']]);
 
     $this->withServerVariables(['REMOTE_ADDR' => '192.168.1.50'])
          ->get('/test-page');
@@ -108,7 +108,7 @@ it('excludes visits from blacklisted IP subnets using CIDR', function () {
 });
 
 it('prevents recording visits for excluded path patterns', function () {
-    config(['visit-analytics.collection.exclude.paths' => ['admin*']]);
+    config(['visit-analytics-collection.exclude.paths' => ['admin*']]);
     
     Route::get('/admin/panel', function () { return 'OK'; })->middleware(TrackVisits::class);
 
@@ -117,7 +117,7 @@ it('prevents recording visits for excluded path patterns', function () {
 });
 
 it('excludes visits if the referer matches an excluded path pattern', function () {
-    config(['visit-analytics.collection.exclude.paths' => ['secret-page*']]);
+    config(['visit-analytics-collection.exclude.paths' => ['secret-page*']]);
 
     $this->withHeaders(['Referer' => 'https://site.com/secret-page/dashboard'])
          ->get('/test-page');
@@ -130,7 +130,7 @@ it('excludes visits if the referer matches an excluded path pattern', function (
  */
 
 it('detects cookie presence in exists mode', function () {
-    config(['visit-analytics.collection.cookie_mode' => 'exists']);
+    config(['visit-analytics-collection.cookie_mode' => 'exists']);
     
     $this->withHeaders(['Cookie' => 'test_cookie=123'])
          ->get('/test-page');

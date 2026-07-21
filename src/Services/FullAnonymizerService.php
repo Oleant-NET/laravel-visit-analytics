@@ -55,7 +55,7 @@ class FullAnonymizerService
      */
     public function runDeferredAnonymization(): int
     {
-        $config = config('visit-analytics.collection.anonymization', []);
+        $config = config('visit-analytics-collection.anonymization', []);
  
         $retentionMinutes = (int) ($config['anonymize_retention_minutes'] ?? 30);
         $anonymizeBots = (bool) ($config['anonymize_bots'] ?? true);
